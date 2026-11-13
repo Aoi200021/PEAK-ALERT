@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { analyzePublicAddress } from "@/lib/market/public";
 import { MarketApiError } from "@/lib/market/dexscreener";
-import { addressSchema } from "@/lib/validation";
+import { addressSchema, SOLANA_ADDRESS } from "@/lib/validation";
+import { fetchJupiterTokens } from "@/lib/market/jupiter";
 import { pickMsg } from "@/lib/i18n";
 import { localeFromRequest } from "@/lib/i18n/server";
 
@@ -44,8 +45,35 @@ export async function GET(req: Request) {
   try {
     const tokens = await analyzePublicAddress(parsed.data);
     if (!tokens.length) {
+      // Exists on a launchpad but nobody traded it yet? Say so instead of a generic error.
+      const jup = SOLANA_ADDRESS.test(parsed.data) ? (await fetchJupiterTokens([parsed.data])).get(parsed.data) : undefined;
+      if (jup) {
+        const name = jup.symbol ?? jup.name ?? "?";
+        const where = jup.launchpad ?? "launchpad";
+        const holders = jup.holderCount != null ? ` (${jup.holderCount} holder${jup.holderCount === 1 ? "" : "s"})` : "";
+        return NextResponse.json(
+          {
+            error: {
+              code: "NO_TRADES",
+              message: tr(
+                `${name} exists on ${where} but has no trades yet${holders}, so there's no real price to analyze. Any market cap shown elsewhere is theoretical.`,
+                `${name} existe en ${where} pero aún no tiene operaciones${holders}, así que no hay un precio real que analizar. Cualquier market cap que veas en otro sitio es teórico.`,
+              ),
+            },
+          },
+          { status: 404 },
+        );
+      }
       return NextResponse.json(
-        { error: { code: "TOKEN_NOT_FOUND", message: tr("DexScreener has no price data for this address on supported chains.", "DexScreener no tiene datos de precio para esta dirección en las redes soportadas.") } },
+        {
+          error: {
+            code: "TOKEN_NOT_FOUND",
+            message: tr(
+              "No market data for this address yet. Check it's the token's contract address; brand-new tokens can take a few minutes to appear.",
+              "Aún no hay datos de mercado para esta dirección. Comprueba que sea la contract address del token; los tokens recién creados pueden tardar unos minutos en aparecer.",
+            ),
+          },
+        },
         { status: 404 },
       );
     }
