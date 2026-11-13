@@ -1,0 +1,136 @@
+"use client";
+
+import { useState } from "react";
+import { api, ApiError } from "@/lib/client/api";
+import type { PositionDTO } from "@/lib/client/types";
+import { formatPrice, toNum } from "@/lib/format";
+import { Button, ErrorNote, Field, Input } from "./ui";
+
+/** datetime-local value for "now" in the user's timezone */
+function localNow(d = new Date()) {
+  const off = d.getTimezoneOffset() * 60_000;
+  return new Date(d.getTime() - off).toISOString().slice(0, 16);
+}
+
+function plainNumber(n: number | null) {
+  if (n == null) return "";
+  // avoid exponent notation for tiny prices
+  return n < 1e-6 ? n.toFixed(14).replace(/0+$/, "") : String(n);
+}
+
+export function NewPositionForm({
+  tokenId,
+  currentPrice,
+  onSaved,
+}: {
+  tokenId: string;
+  currentPrice: number | null;
+  onSaved: () => void;
+}) {
+  const [entryPrice, setEntryPrice] = useState(plainNumber(currentPrice));
+  const [invested, setInvested] = useState("");
+  const [entryAt, setEntryAt] = useState(localNow());
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api("/api/positions", {
+        method: "POST",
+        json: {
+          tokenId,
+          entryPrice: Number(entryPrice),
+          investedUsd: Number(invested),
+          entryAt: new Date(entryAt).toISOString(),
+          notes: notes || undefined,
+        },
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const qty = Number(invested) > 0 && Number(entryPrice) > 0 ? Number(invested) / Number(entryPrice) : null;
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Precio de entrada (USD)" hint={currentPrice ? `Actual: ${formatPrice(currentPrice)}` : undefined}>
+          <Input type="number" inputMode="decimal" step="any" min={0} required value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} className="num" />
+        </Field>
+        <Field label="Monto invertido (USD)" hint={qty ? `≈ ${qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} tokens` : undefined}>
+          <Input type="number" inputMode="decimal" step="any" min={0} required value={invested} onChange={(e) => setInvested(e.target.value)} className="num" />
+        </Field>
+      </div>
+      <Field label="Fecha de compra">
+        <Input type="datetime-local" required value={entryAt} max={localNow()} onChange={(e) => setEntryAt(e.target.value)} />
+      </Field>
+      <Field label="Notas (opcional)">
+        <Input maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Ej: entré tras listing en Raydium" />
+      </Field>
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <Button type="submit" variant="primary" className="w-full" loading={saving}>
+        Registrar posición
+      </Button>
+    </form>
+  );
+}
+
+export function ClosePositionForm({
+  position,
+  currentPrice,
+  onSaved,
+}: {
+  position: PositionDTO;
+  currentPrice: number | null;
+  onSaved: () => void;
+}) {
+  const [exitPrice, setExitPrice] = useState(plainNumber(toNum(position.exit_price) ?? currentPrice));
+  const [exitAt, setExitAt] = useState(localNow());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      await api(`/api/positions/${position.id}`, {
+        method: "PATCH",
+        json: { exitPrice: Number(exitPrice), exitAt: new Date(exitAt).toISOString() },
+      });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "No se pudo guardar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-3">
+      <p className="text-xs text-muted">
+        Registra a qué precio vendiste. PeakAlert no ejecuta operaciones: esto solo actualiza tu registro.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Precio de venta (USD)" hint={currentPrice ? `Actual: ${formatPrice(currentPrice)}` : undefined}>
+          <Input type="number" inputMode="decimal" step="any" min={0} required value={exitPrice} onChange={(e) => setExitPrice(e.target.value)} className="num" />
+        </Field>
+        <Field label="Fecha de venta">
+          <Input type="datetime-local" required value={exitAt} max={localNow()} onChange={(e) => setExitAt(e.target.value)} />
+        </Field>
+      </div>
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <Button type="submit" variant="primary" className="w-full" loading={saving}>
+        Registrar venta
+      </Button>
+    </form>
+  );
+}
