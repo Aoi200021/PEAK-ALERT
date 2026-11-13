@@ -7,22 +7,25 @@ import { Bell, ChartNoAxesColumn, LayoutGrid, LogOut, Settings, ShieldCheck, Sir
 import type { ReactNode } from "react";
 import { LogoMark } from "./brand";
 import { InstallPrompt } from "./install-prompt";
+import { LanguageSwitcher } from "./language-switcher";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "./ui";
 import { fetcher } from "@/lib/client/api";
 import type { MeResponse } from "@/lib/client/types";
 import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
-  { href: "/alerts", label: "Alertas", icon: Siren },
-  { href: "/portfolio", label: "Protección", icon: ShieldCheck },
-  { href: "/analytics", label: "Analíticas", icon: ChartNoAxesColumn },
-  { href: "/settings", label: "Ajustes", icon: Settings },
+  { href: "/dashboard", label: { en: "Dashboard", es: "Dashboard" }, icon: LayoutGrid },
+  { href: "/alerts", label: { en: "Alerts", es: "Alertas" }, icon: Siren },
+  { href: "/portfolio", label: { en: "Protection", es: "Protección" }, icon: ShieldCheck },
+  { href: "/analytics", label: { en: "Analytics", es: "Analíticas" }, icon: ChartNoAxesColumn },
+  { href: "/settings", label: { en: "Settings", es: "Ajustes" }, icon: Settings },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { t, p } = useI18n();
   const { data: me } = useSWR<MeResponse>("/api/me", fetcher, { revalidateOnFocus: false });
   const { data: unread } = useSWR<{ unread: number }>("/api/alerts/events?unread=1&limit=1", fetcher, {
     refreshInterval: 30_000,
@@ -55,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             >
               <Icon size={15} strokeWidth={1.8} />
-              {label}
+              {p(label)}
               {href === "/alerts" && (unread?.unread ?? 0) > 0 && (
                 <span className="num ml-auto rounded bg-down/15 px-1.5 text-[11px] text-down">{unread!.unread}</span>
               )}
@@ -67,11 +70,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="mb-2 px-1">
               <p className="truncate text-xs text-muted">{me.email}</p>
               <p className="mt-0.5 text-[11px] text-faint">
-                Plan <span className="text-text">{me.plan.name}</span> · {me.usage.tokens}/{me.plan.maxTokens} tokens
+                {t("Plan", "Plan")} <span className="text-text">{me.plan.name}</span> · {me.usage.tokens}/{me.plan.maxTokens} tokens
               </p>
               {me.plan.id !== "premium" && (
                 <Link href="/pricing" className="mt-2 flex items-center gap-1.5 rounded-md border border-line-strong bg-panel px-2 py-1.5 text-xs text-text hover:bg-panel-2">
-                  <Sparkles size={12} className="text-warn" /> Mejorar plan
+                  <Sparkles size={12} className="text-warn" /> {t("Upgrade plan", "Mejorar plan")}
                 </Link>
               )}
             </div>
@@ -80,8 +83,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             onClick={signOut}
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted hover:bg-panel hover:text-text"
           >
-            <LogOut size={13} /> Cerrar sesión
+            <LogOut size={13} /> {t("Sign out", "Cerrar sesión")}
           </button>
+          <LanguageSwitcher className="mt-2 px-2" />
         </div>
       </aside>
 
@@ -91,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link href="/dashboard" className="flex items-center gap-2 text-sm font-semibold">
             <LogoMark size={20} /> PeakAlert
           </Link>
-          <Link href="/alerts" className="relative rounded p-1.5 text-muted" aria-label="Alertas">
+          <Link href="/alerts" className="relative rounded p-1.5 text-muted" aria-label={t("Alerts", "Alertas")}>
             <Bell size={18} />
             {(unread?.unread ?? 0) > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-down" />}
           </Link>
@@ -111,7 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               className={cn("flex flex-col items-center gap-0.5 py-2 text-[10px]", active(href) ? "text-text" : "text-faint")}
             >
               <Icon size={18} strokeWidth={1.8} />
-              {label}
+              {p(label)}
             </Link>
           ))}
         </nav>

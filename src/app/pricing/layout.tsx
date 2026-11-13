@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Precios",
-  description: "Planes Free, Pro ($5/mes) y Premium ($10/mes) de PeakAlert.",
+  title: "Pricing",
+  description: "PeakAlert plans: Free, Pro ($5/mo) and Premium ($10/mo).",
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

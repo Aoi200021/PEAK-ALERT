@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import { localeFromRequest } from "@/lib/i18n/server";
 
 /** Handles email confirmation / magic links (PKCE `code` or `token_hash`). */
 export async function GET(request: NextRequest) {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (error) {
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent("El enlace no es válido o expiró.")}`, url.origin));
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(localeFromRequest(request) === "es" ? "El enlace no es válido o expiró." : "The link is invalid or has expired.")}`, url.origin));
   }
   return NextResponse.redirect(new URL(next, url.origin));
 }

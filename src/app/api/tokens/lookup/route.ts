@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, requireUser, zodMessage } from "@/lib/api";
 import { lookupToken } from "@/lib/market/dexscreener";
 import { addressSchema, SUPPORTED_CHAINS } from "@/lib/validation";
@@ -17,8 +18,8 @@ export const GET = handler(async (req: Request) => {
       404,
       "TOKEN_NOT_FOUND",
       all.length
-        ? "El token existe pero solo en redes que PeakAlert aún no soporta."
-        : "DexScreener no tiene pares con precio para esta dirección. Verifica la dirección o inténtalo más tarde.",
+        ? L("The token exists, but only on chains PeakAlert doesn't support yet.", "El token existe pero solo en redes que PeakAlert aún no soporta.")
+        : L("DexScreener has no priced pairs for this address. Check the address or try again later.", "DexScreener no tiene pares con precio para esta dirección. Verifica la dirección o inténtalo más tarde."),
     );
   }
   return NextResponse.json({ candidates, fetchedAt: new Date().toISOString() });

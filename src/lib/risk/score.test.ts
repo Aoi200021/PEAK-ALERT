@@ -71,7 +71,10 @@ describe("computeRisk", () => {
     expect(f.peak_rejections.score).toBeGreaterThanOrEqual(65);
     expect(f.liquidity_drop.score).toBeGreaterThan(50);
     expect(f.sell_pressure.score).toBeGreaterThan(70);
-    expect(r.summary).toMatch(/Señales principales/);
+    expect(r.summary.es).toMatch(/Señales principales/);
+    expect(r.summary.en).toMatch(/Main signals/);
+    expect(f.sell_pressure.detail.en).toMatch(/More sells than buys/);
+    expect(f.sell_pressure.label).toEqual({ en: "Sell pressure", es: "Presión de venta" });
   });
 
   it("excludes factors without data instead of guessing, and reports coverage", () => {

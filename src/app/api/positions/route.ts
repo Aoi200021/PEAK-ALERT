@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, readJson, requireUser, zodMessage } from "@/lib/api";
 import { createPositionSchema } from "@/lib/validation";
 
 function requirePortfolio(plan: { portfolio: boolean }) {
-  if (!plan.portfolio) throw new HttpError(403, "PLAN_FEATURE", "Profit Protection está disponible en Pro y Premium.");
+  if (!plan.portfolio) throw new HttpError(403, "PLAN_FEATURE", L("Profit Protection is available on Pro and Premium.", "Profit Protection está disponible en Pro y Premium."));
 }
 
 export const GET = handler(async () => {
@@ -26,7 +27,7 @@ export const POST = handler(async (req: Request) => {
   const { tokenId, investedUsd, entryAt, notes, entryMarketCap } = body.data;
 
   const { data: token } = await admin.from("tokens").select("id, price_usd, market_cap").eq("id", tokenId).maybeSingle();
-  if (!token) throw new HttpError(404, "NOT_FOUND", "Token no encontrado. Agrégalo primero a tu lista.");
+  if (!token) throw new HttpError(404, "NOT_FOUND", L("Token not found. Add it to your watchlist first.", "Token no encontrado. Agrégalo primero a tu lista."));
 
   let entryPrice = body.data.entryPrice;
   if (entryPrice == null) {
@@ -34,7 +35,7 @@ export const POST = handler(async (req: Request) => {
     const price = Number(token.price_usd);
     const mc = Number(token.market_cap);
     if (!(price > 0) || !(mc > 0)) {
-      throw new HttpError(400, "NO_MARKET_CAP", "No hay market cap actual para calcular el precio de entrada. Indica el precio de entrada.");
+      throw new HttpError(400, "NO_MARKET_CAP", L("There's no current market cap to derive the entry price. Enter the entry price instead.", "No hay market cap actual para calcular el precio de entrada. Indica el precio de entrada."));
     }
     entryPrice = entryMarketCap! * (price / mc);
   }

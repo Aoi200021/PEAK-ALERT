@@ -209,8 +209,16 @@ describe("v2 alert types", () => {
     score,
     coverage,
     level: "x",
-    summary: "s",
-    factors: [{ label: "Presión de venta", score: 80, available: true, value: "2.1 ventas por compra" }],
+    summary: { en: "s", es: "s" },
+    factors: [
+      {
+        key: "sell_pressure",
+        label: { en: "Sell pressure", es: "Presión de venta" },
+        score: 80,
+        available: true,
+        value: { en: "2.10 sells per buy", es: "2.10 ventas por compra" },
+      },
+    ],
   });
 
   it("exhaustion_risk fires above threshold with hysteresis and explains itself", () => {
@@ -228,11 +236,16 @@ describe("v2 alert types", () => {
       10,
     );
     expect(fired).toEqual([1, 5]);
-    const res = evaluateRule(r, market({ context: { risk: risk(90) } }), NOW);
+    const res = evaluateRule(r, market({ context: { risk: risk(90) } }), NOW, "es");
     expect(res.event?.severity).toBe("critical");
     expect(res.event?.explanation.indicators[0].label).toBe("Presión de venta");
     expect(res.event?.explanation.watch.length).toBeGreaterThan(0);
     expect(res.event?.explanation.risk).toMatch(/no es la probabilidad/);
+    // English is the default language
+    const en = evaluateRule(r, market({ context: { risk: risk(90) } }), NOW);
+    expect(en.event?.title).toBe("Exhaustion risk 90/100");
+    expect(en.event?.explanation.indicators[0]).toMatchObject({ label: "Sell pressure", value: "2.10 sells per buy · 80/100" });
+    expect(en.event?.explanation.risk).toMatch(/not the probability/);
   });
 
   it("exhaustion_risk ignores low-coverage scores", () => {
@@ -282,11 +295,17 @@ describe("v2 alert types", () => {
     expect(res2.fire).toBe(false);
   });
 
-  it("every fired alert has a complete explanation", () => {
-    const res = evaluateRule(rule({ params: { drop_pct: 10 }, state: { peak_price: 2 } }), market({ priceUsd: 1.5 }), NOW);
-    const e = res.event!.explanation;
-    expect(e.what && e.why && e.risk).toBeTruthy();
-    expect(e.indicators.length).toBeGreaterThan(1);
-    expect(JSON.stringify(e)).not.toMatch(/va a caer|debes vender|vende ya/i);
+  it("every fired alert has a complete explanation, in both languages, without certainty claims", () => {
+    for (const locale of ["en", "es"] as const) {
+      const res = evaluateRule(rule({ params: { drop_pct: 10 }, state: { peak_price: 2 } }), market({ priceUsd: 1.5 }), NOW, locale);
+      const e = res.event!.explanation;
+      expect(e.what && e.why && e.risk).toBeTruthy();
+      expect(e.indicators.length).toBeGreaterThan(1);
+      expect(JSON.stringify(e)).not.toMatch(/va a caer|debes vender|vende ya|will fall|must sell|sell now/i);
+    }
+    const en = evaluateRule(rule({ params: { drop_pct: 10 }, state: { peak_price: 2 } }), market({ priceUsd: 1.5 }), NOW);
+    expect(en.event?.title).toBe("25.0% drop from the high");
+    const es = evaluateRule(rule({ params: { drop_pct: 10 }, state: { peak_price: 2 } }), market({ priceUsd: 1.5 }), NOW, "es");
+    expect(es.event?.title).toBe("Caída de 25.0% desde el máximo");
   });
 });

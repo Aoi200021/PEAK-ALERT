@@ -4,13 +4,16 @@ import { AuthForm } from "@/components/auth-form";
 import { AuthLayout } from "@/components/auth-layout";
 import { SetupNotice } from "@/components/setup-notice";
 import { publicSupabaseEnv } from "@/lib/env";
+import { getLocale } from "@/lib/i18n/server";
 
-export const metadata: Metadata = { title: "Crear cuenta" };
+export const metadata: Metadata = { title: "Sign up" };
 
-export default function SignupPage() {
+export default async function SignupPage() {
+  const locale = await getLocale();
+  const es = locale === "es";
   if (!publicSupabaseEnv().configured) return <div className="px-4 py-20"><SetupNotice /></div>;
   return (
-    <AuthLayout title="Crea tu cuenta" sub="Gratis: sigue hasta 2 tokens con alertas básicas.">
+    <AuthLayout locale={locale} title={es ? "Crea tu cuenta" : "Create your account"} sub={es ? "Gratis: monitorea hasta 3 tokens con su puntuación de riesgo." : "Free: track up to 3 tokens with their risk score."}>
       <Suspense>
         <AuthForm mode="signup" />
       </Suspense>

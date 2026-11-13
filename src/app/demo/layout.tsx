@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Demo",
-  description: "Vista previa de Peak Detection con datos públicos de DexScreener.",
+  description: "Live Peak Detection preview with public DexScreener data.",
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {

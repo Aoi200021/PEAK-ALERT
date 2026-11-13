@@ -33,6 +33,13 @@ Plataforma SaaS para traders de memecoins: detecta **señales de posible agotami
 
 Código: `src/lib/risk/score.ts` (funciones puras, con tests).
 
+### Idiomas
+La app es **bilingüe: inglés por defecto y español**.
+- **Detección:** si el navegador está en español, se muestra en español; en cualquier otro idioma, en inglés. El selector **EN / ES** (cabecera pública, barra lateral y Ajustes) guarda la elección en la cookie `pa_locale`.
+- **Alertas y notificaciones push:** se generan en el idioma de cada usuario (`profiles.locale`, que se sincroniza automáticamente con el idioma en que usa la app). Las alertas ya guardadas conservan el idioma con el que se crearon.
+- **Textos de los factores de riesgo:** se guardan en ambos idiomas, porque un mismo token lo ven usuarios de los dos.
+- **Código:** `src/lib/i18n` (`t("English", "Español")` en el cliente con `useI18n()`; `getLocale()` en el servidor).
+
 ## 2. Arquitectura
 
 ```
@@ -103,8 +110,8 @@ Definición única: `src/lib/plans.ts`. El límite de tokens está duplicado en 
 
 ### 6.1 Supabase
 1. Crea un proyecto en <https://supabase.com/dashboard>.
-2. **SQL Editor** → ejecuta **en orden** `supabase/migrations/0001_init.sql` y `0002_peak_detection.sql`. Ambos se pueden volver a ejecutar sin problema.
-   *Si ya tenías la v1 desplegada, ejecuta solo `0002`.*
+2. **SQL Editor** → ejecuta **en orden** `supabase/migrations/0001_init.sql`, `0002_peak_detection.sql` y `0003_locale.sql`. Todos se pueden volver a ejecutar sin problema.
+   *Si ya tenías una versión anterior desplegada, ejecuta solo las migraciones que te falten.*
 3. **Project Settings → API Keys**: copia la *Publishable key* y la *Secret key*. La URL está en **Data API**.
 4. **Authentication → URL Configuration**: *Site URL* = tu dominio. En *Redirect URLs* añade `https://TU-DOMINIO/auth/callback` (y `http://localhost:3000/auth/callback`).
 5. Para usuarios reales configura un SMTP propio (**Authentication → Emails**). El SMTP incluido tiene un límite muy bajo.
@@ -128,7 +135,7 @@ npx web-push generate-vapid-keys     # → NEXT_PUBLIC_VAPID_PUBLIC_KEY y VAPID_
 ```bash
 npm install
 npm run dev          # http://localhost:3000
-npm test             # 42 tests unitarios
+npm test             # 45 tests unitarios
 npm run test:live    # tests contra DexScreener real
 ```
 
@@ -154,7 +161,7 @@ update public.profiles set plan = 'pro' where email = 'usuario@ejemplo.com';
 ## 7. Estado: qué está verificado y qué no
 
 **Verificado en este entorno:**
-- 42 tests unitarios: motor de riesgo, los 10 tipos de alerta y sus explicaciones, anti-spam, simulación de trailing stops, Profit Protection, Paper Exit, contexto de historial y lógica de Stripe (mapeo de planes, sincronización y verificación de firmas de webhook).
+- 45 tests unitarios (incluida la detección de idioma y las alertas en inglés y español): motor de riesgo, los 10 tipos de alerta y sus explicaciones, anti-spam, simulación de trailing stops, Profit Protection, Paper Exit, contexto de historial y lógica de Stripe (mapeo de planes, sincronización y verificación de firmas de webhook).
 - 4 tests contra la API real de DexScreener. La demo pública se probó con datos en vivo.
 - Las migraciones se probaron en Postgres 16: instalación limpia, actualización desde la v1 y doble ejecución.
 - `next build`, `tsc` y `eslint` sin errores.

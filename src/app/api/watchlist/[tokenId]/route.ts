@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, requireUser } from "@/lib/api";
 import { uuidSchema } from "@/lib/validation";
 
@@ -6,7 +7,7 @@ import { uuidSchema } from "@/lib/validation";
 export const DELETE = handler(async (_req: Request, ctx: RouteContext<"/api/watchlist/[tokenId]">) => {
   const { user, admin } = await requireUser();
   const { tokenId } = await ctx.params;
-  if (!uuidSchema.safeParse(tokenId).success) throw new HttpError(400, "INVALID_ID", "ID no válido.");
+  if (!uuidSchema.safeParse(tokenId).success) throw new HttpError(400, "INVALID_ID", L("Invalid ID.", "ID no válido."));
   await admin.from("alert_rules").delete().eq("user_id", user.id).eq("token_id", tokenId);
   const { error } = await admin.from("watchlist").delete().eq("user_id", user.id).eq("token_id", tokenId);
   if (error) throw error;

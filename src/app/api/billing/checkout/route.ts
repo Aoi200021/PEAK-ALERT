@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, readJson, requireUser } from "@/lib/api";
 import { billingEnabled, getStripe, priceForPlan } from "@/lib/billing";
 
@@ -8,10 +9,10 @@ const schema = z.object({ plan: z.enum(["pro", "premium"]) });
 /** Creates a Stripe Checkout session. 501 when Stripe isn't configured — no fake checkout. */
 export const POST = handler(async (req: Request) => {
   const { user, plan: current, admin } = await requireUser();
-  if (!billingEnabled()) throw new HttpError(501, "BILLING_NOT_AVAILABLE", "Los pagos todavía no están disponibles.");
+  if (!billingEnabled()) throw new HttpError(501, "BILLING_NOT_AVAILABLE", L("Payments aren't available yet.", "Los pagos todavía no están disponibles."));
   const body = schema.safeParse(await readJson(req));
-  if (!body.success) throw new HttpError(400, "INVALID_INPUT", "Plan no válido.");
-  if (current.id === body.data.plan) throw new HttpError(400, "SAME_PLAN", "Ya tienes este plan.");
+  if (!body.success) throw new HttpError(400, "INVALID_INPUT", L("Invalid plan.", "Plan no válido."));
+  if (current.id === body.data.plan) throw new HttpError(400, "SAME_PLAN", L("You already have this plan.", "Ya tienes este plan."));
 
   const stripe = getStripe();
   const { data: profile } = await admin
@@ -22,7 +23,7 @@ export const POST = handler(async (req: Request) => {
 
   // Already subscribed → change plan in the Customer Portal (avoids double subscriptions).
   if (profile?.stripe_subscription_id && ["active", "trialing", "past_due"].includes(profile.subscription_status ?? "")) {
-    throw new HttpError(409, "HAS_SUBSCRIPTION", "Ya tienes una suscripción. Cambia de plan desde «Gestionar suscripción».");
+    throw new HttpError(409, "HAS_SUBSCRIPTION", L("You already have a subscription. Change plans from “Manage subscription”.", "Ya tienes una suscripción. Cambia de plan desde «Gestionar suscripción»."));
   }
 
   let customerId = profile?.stripe_customer_id as string | null;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { L, msg } from "@/lib/i18n";
 import { handler, HttpError, readJson, requireUser, zodMessage } from "@/lib/api";
 import { fetchPairsForChain, pairToTokenRow } from "@/lib/market/dexscreener";
 import { refreshTokens } from "@/lib/market/refresh";
@@ -24,7 +25,7 @@ export const GET = handler(async () => {
     if (s.errors.length) refreshError = s.errors.join("; ");
   } catch (e) {
     console.error("[watchlist] refresh failed", e);
-    refreshError = "No se pudieron actualizar los datos de mercado. Se muestran los últimos disponibles.";
+    refreshError = msg("Couldn't update market data. Showing the latest available.", "No se pudieron actualizar los datos de mercado. Se muestran los últimos disponibles.");
   }
 
   const { data: tokens } = ids.length
@@ -75,7 +76,7 @@ export const POST = handler(async (req: Request) => {
     throw new HttpError(
       403,
       "PLAN_TOKEN_LIMIT",
-      `Tu plan ${plan.name} permite seguir hasta ${plan.maxTokens} tokens.`,
+      L(`Your ${plan.name} plan allows up to ${plan.maxTokens} tokens.`, `Tu plan ${plan.name} permite seguir hasta ${plan.maxTokens} tokens.`),
       { limit: plan.maxTokens },
     );
   }
@@ -84,7 +85,7 @@ export const POST = handler(async (req: Request) => {
   const pairs = await fetchPairsForChain(chainId, [address]);
   const pair = pairs.get(address);
   if (!pair || pair.priceUsd == null) {
-    throw new HttpError(404, "TOKEN_NOT_FOUND", "No hay datos de mercado para este token en esa red.");
+    throw new HttpError(404, "TOKEN_NOT_FOUND", L("No market data for this token on that chain.", "No hay datos de mercado para este token en esa red."));
   }
 
   const now = new Date().toISOString();
@@ -133,9 +134,9 @@ export const POST = handler(async (req: Request) => {
 
   const { error: wErr } = await admin.from("watchlist").insert({ user_id: user.id, token_id: tokenId, added_price: row.price_usd });
   if (wErr) {
-    if (wErr.code === "23505") throw new HttpError(409, "ALREADY_WATCHING", "Ya sigues este token.");
+    if (wErr.code === "23505") throw new HttpError(409, "ALREADY_WATCHING", L("You already follow this token.", "Ya sigues este token."));
     if (wErr.message?.includes("PLAN_TOKEN_LIMIT"))
-      throw new HttpError(403, "PLAN_TOKEN_LIMIT", `Tu plan ${plan.name} permite seguir hasta ${plan.maxTokens} tokens.`);
+      throw new HttpError(403, "PLAN_TOKEN_LIMIT", L(`Your ${plan.name} plan allows up to ${plan.maxTokens} tokens.`, `Tu plan ${plan.name} permite seguir hasta ${plan.maxTokens} tokens.`));
     throw wErr;
   }
   return NextResponse.json({ tokenId }, { status: 201 });

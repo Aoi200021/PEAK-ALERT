@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Lock } from "lucide-react";
 import { LEVELS, levelFor, type RiskFactor, type RiskLevel } from "@/lib/risk/score";
 import { cn } from "./ui";
+import { useI18n } from "@/lib/i18n/client";
 
 export const LEVEL_COLOR: Record<RiskLevel, string> = {
   healthy: "var(--up)",
@@ -32,14 +33,15 @@ export function riskLevel(score: number | null | undefined): RiskLevel | null {
 
 /** Compact score pill used in tables. */
 export function RiskBadge({ score, coverage, size = "md" }: { score: number | null | undefined; coverage?: number | null; size?: "sm" | "md" }) {
+  const { t, p } = useI18n();
   const level = riskLevel(score);
   if (level == null) {
-    return <span className="text-xs text-faint" title="Se calcula tras la primera actualización">—</span>;
+    return <span className="text-xs text-faint" title={t("Calculated after the first update", "Se calcula tras la primera actualización")}>—</span>;
   }
   const low = coverage != null && coverage < 0.6;
   return (
     <span
-      title={`${LEVELS[level].label}${low ? " · datos parciales (historial aún corto)" : ""}`}
+      title={`${p(LEVELS[level].label)}${low ? t(" · partial data (history still short)", " · datos parciales (historial aún corto)") : ""}`}
       className={cn("num inline-flex items-center gap-1.5 rounded-md ring-1", LEVEL_BG[level], LEVEL_TEXT[level], size === "sm" ? "px-1.5 py-0.5 text-[11px]" : "px-2 py-0.5 text-xs")}
     >
       <span className="h-1.5 w-1.5 rounded-full" style={{ background: LEVEL_COLOR[level] }} />
@@ -51,6 +53,7 @@ export function RiskBadge({ score, coverage, size = "md" }: { score: number | nu
 
 /** Semicircle gauge 0–100 with the four bands. */
 export function RiskGauge({ score, coverage, size = 180 }: { score: number | null; coverage?: number | null; size?: number }) {
+  const { t, p } = useI18n();
   const r = 70;
   const cx = 90;
   const cy = 86;
@@ -63,7 +66,7 @@ export function RiskGauge({ score, coverage, size = 180 }: { score: number | nul
   const angle = Math.PI * (1 - (score ?? 0) / 100);
   return (
     <div className="flex flex-col items-center">
-      <svg width={size} height={size * 0.6} viewBox="0 0 180 104" aria-label={score == null ? "Sin puntuación" : `Riesgo ${score} de 100`}>
+      <svg width={size} height={size * 0.6} viewBox="0 0 180 104" aria-label={score == null ? t("No score", "Sin puntuación") : t(`Risk ${score} out of 100`, `Riesgo ${score} de 100`)}>
         {([[0, 30, "healthy"], [30, 60, "caution"], [60, 80, "elevated"], [80, 100, "very_high"]] as const).map(([a, b, l]) => (
           <path key={l} d={arc(a + 0.8, b - 0.8)} fill="none" stroke={LEVEL_COLOR[l]} strokeOpacity={level === l ? 0.95 : 0.22} strokeWidth="10" strokeLinecap="round" />
         ))}
@@ -75,24 +78,27 @@ export function RiskGauge({ score, coverage, size = 180 }: { score: number | nul
         )}
       </svg>
       <p className={cn("num -mt-1 text-3xl font-medium tracking-tight", level ? LEVEL_TEXT[level] : "text-faint")}>{score ?? "—"}</p>
-      <p className="mt-0.5 text-xs text-muted">{level ? LEVELS[level].label : "Calculando…"}</p>
-      {coverage != null && coverage < 0.6 && <p className="mt-1 text-[10px] text-faint">Datos parciales: el historial aún es corto</p>}
+      <p className="mt-0.5 text-xs text-muted">{level ? p(LEVELS[level].label) : t("Calculating…", "Calculando…")}</p>
+      {coverage != null && coverage < 0.6 && (
+        <p className="mt-1 text-[10px] text-faint">{t("Partial data: history is still short", "Datos parciales: el historial aún es corto")}</p>
+      )}
     </div>
   );
 }
 
 export function RiskFactors({ factors, locked }: { factors: RiskFactor[] | null | undefined; locked?: boolean }) {
+  const { t, p } = useI18n();
   if (locked) {
     return (
       <div className="rounded-md border border-line bg-bg/50 p-4 text-center">
         <Lock size={16} className="mx-auto text-faint" />
-        <p className="mt-2 text-sm">Desglose de los 8 factores</p>
-        <p className="mt-1 text-xs text-muted">Peak Detection avanzado está disponible en Pro y Premium.</p>
-        <Link href="/pricing" className="mt-3 inline-block text-xs text-text underline underline-offset-2">Ver planes</Link>
+        <p className="mt-2 text-sm">{t("Breakdown of all 8 factors", "Desglose de los 8 factores")}</p>
+        <p className="mt-1 text-xs text-muted">{t("Advanced Peak Detection is available on Pro and Premium.", "Peak Detection avanzado está disponible en Pro y Premium.")}</p>
+        <Link href="/pricing" className="mt-3 inline-block text-xs text-text underline underline-offset-2">{t("See plans", "Ver planes")}</Link>
       </div>
     );
   }
-  if (!factors?.length) return <p className="text-xs text-muted">Los factores aparecerán tras la próxima actualización.</p>;
+  if (!factors?.length) return <p className="text-xs text-muted">{t("Factors will appear after the next update.", "Los factores aparecerán tras la próxima actualización.")}</p>;
   return (
     <ul className="space-y-3">
       {[...factors]
@@ -102,13 +108,13 @@ export function RiskFactors({ factors, locked }: { factors: RiskFactor[] | null 
           return (
             <li key={f.key} className={cn(!f.available && "opacity-55")}>
               <div className="flex items-baseline justify-between gap-2 text-xs">
-                <span className="font-medium text-text">{f.label}</span>
-                <span className="num text-faint">{f.available ? `${f.value ?? ""} · ${f.score}` : "sin datos"}</span>
+                <span className="font-medium text-text">{p(f.label)}</span>
+                <span className="num text-faint">{f.available ? `${p(f.value)} · ${f.score}` : t("no data", "sin datos")}</span>
               </div>
               <div className="mt-1 h-1 overflow-hidden rounded-full bg-panel-2">
                 <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${f.available ? Math.max(f.score, 2) : 0}%`, background: LEVEL_COLOR[level] }} />
               </div>
-              <p className="mt-1 text-[11px] leading-snug text-muted">{f.detail}</p>
+              <p className="mt-1 text-[11px] leading-snug text-muted">{p(f.detail)}</p>
             </li>
           );
         })}
@@ -116,5 +122,7 @@ export function RiskFactors({ factors, locked }: { factors: RiskFactor[] | null 
   );
 }
 
-export const RISK_DISCLAIMER =
-  "La puntuación resume señales de mercado con reglas transparentes. No es una probabilidad ni una predicción: el precio puede seguir subiendo con una puntuación alta.";
+export const RISK_DISCLAIMER = {
+  en: "The score summarizes market signals with transparent rules. It is not a probability or a prediction: price can keep rising with a high score.",
+  es: "La puntuación resume señales de mercado con reglas transparentes. No es una probabilidad ni una predicción: el precio puede seguir subiendo con una puntuación alta.",
+};

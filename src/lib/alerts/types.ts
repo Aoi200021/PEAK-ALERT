@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { L, msg, type L10n } from "../i18n";
 
 export const ALERT_TYPES = [
   "drawdown_from_peak",
@@ -52,7 +53,7 @@ export const momentumLossParams = z.object({
 
 export const marketCapCrossParams = z.object({
   direction: z.enum(["above", "below"]),
-  value_usd: usd.refine((v) => v > 0, "Debe ser mayor que 0"),
+  value_usd: usd.refine((v) => v > 0, msg("Must be greater than 0", "Debe ser mayor que 0")),
 });
 
 export const exhaustionRiskParams = z.object({
@@ -103,62 +104,74 @@ export const PARAM_SCHEMAS = {
 
 export type ParamsFor<T extends AlertType> = z.infer<(typeof PARAM_SCHEMAS)[T]>;
 
-export const ALERT_META: Record<
-  AlertType,
-  { label: string; short: string; description: string }
-> = {
+export const ALERT_META: Record<AlertType, { label: L10n; short: L10n; description: L10n }> = {
   drawdown_from_peak: {
-    label: "Caída desde el máximo",
-    short: "Drawdown",
-    description:
+    label: L("Drop from high", "Caída desde el máximo"),
+    short: L("Drawdown", "Drawdown"),
+    description: L(
+      "Fires when price falls a % below the highest price PeakAlert has recorded since you created the alert.",
       "Se activa cuando el precio cae un % desde el máximo que PeakAlert ha registrado desde que creaste la alerta.",
+    ),
   },
   price_spike: {
-    label: "Movimiento brusco de precio",
-    short: "Spike",
-    description: "Se activa cuando la variación en 5 min o 1 h supera el umbral.",
+    label: L("Sudden price move", "Movimiento brusco de precio"),
+    short: L("Spike", "Spike"),
+    description: L("Fires when the 5-min or 1-hour change exceeds the threshold.", "Se activa cuando la variación en 5 min o 1 h supera el umbral."),
   },
   volume_drop: {
-    label: "Caída del volumen",
-    short: "Volumen",
-    description:
+    label: L("Volume drop", "Caída del volumen"),
+    short: L("Volume", "Volumen"),
+    description: L(
+      "Compares last-hour volume with the hourly average of the previous 5 hours.",
       "Compara el volumen de la última hora con el promedio horario de las 5 horas anteriores.",
+    ),
   },
   momentum_loss: {
-    label: "Pérdida de momentum",
-    short: "Momentum",
-    description:
+    label: L("Momentum loss", "Pérdida de momentum"),
+    short: L("Momentum", "Momentum"),
+    description: L(
+      "Heuristic: the token rallied hard over 6h, is now falling over 1h and sells outnumber buys.",
       "Heurística: el token subió fuerte en 6 h, ahora cae en 1 h y hay más ventas que compras.",
+    ),
   },
   market_cap_cross: {
-    label: "Cruce de market cap",
-    short: "Market cap",
-    description: "Se activa cuando el market cap cruza por encima o por debajo de un valor.",
+    label: L("Market cap cross", "Cruce de market cap"),
+    short: L("Market cap", "Market cap"),
+    description: L("Fires when market cap crosses above or below a level.", "Se activa cuando el market cap cruza por encima o por debajo de un valor."),
   },
   exhaustion_risk: {
-    label: "Riesgo de agotamiento (Peak Detection)",
-    short: "Agotamiento",
-    description: "Se activa cuando la puntuación de riesgo de agotamiento del impulso (0–100) supera tu umbral.",
+    label: L("Exhaustion risk (Peak Detection)", "Riesgo de agotamiento (Peak Detection)"),
+    short: L("Exhaustion", "Agotamiento"),
+    description: L(
+      "Fires when the momentum-exhaustion risk score (0–100) goes above your threshold.",
+      "Se activa cuando la puntuación de riesgo de agotamiento del impulso (0–100) supera tu umbral.",
+    ),
   },
   liquidity_drop: {
-    label: "Movimiento anormal de liquidez",
-    short: "Liquidez",
-    description: "Se activa cuando la liquidez del pool cae un % en 1 h o 6 h.",
+    label: L("Unusual liquidity move", "Movimiento anormal de liquidez"),
+    short: L("Liquidity", "Liquidez"),
+    description: L("Fires when pool liquidity falls a % within 1h or 6h.", "Se activa cuando la liquidez del pool cae un % en 1 h o 6 h."),
   },
   trend_break: {
-    label: "Ruptura de tendencia",
-    short: "Tendencia",
-    description: "Tras una subida, el precio cae por debajo de su precio medio de la última hora.",
+    label: L("Trend break", "Ruptura de tendencia"),
+    short: L("Trend", "Tendencia"),
+    description: L(
+      "After a rally, price drops below its average price of the last hour.",
+      "Tras una subida, el precio cae por debajo de su precio medio de la última hora.",
+    ),
   },
   trailing_stop: {
-    label: "Trailing stop (posición)",
-    short: "Trailing",
-    description: "Se activa cuando el precio cae un % desde el máximo alcanzado desde tu entrada.",
+    label: L("Trailing stop (position)", "Trailing stop (posición)"),
+    short: L("Trailing", "Trailing"),
+    description: L("Fires when price falls a % from the highest price since your entry.", "Se activa cuando el precio cae un % desde el máximo alcanzado desde tu entrada."),
   },
   profit_giveback: {
-    label: "Retroceso de beneficio (posición)",
-    short: "Retroceso",
-    description: "Se activa cuando devuelves un % del beneficio máximo no realizado de tu posición.",
+    label: L("Profit giveback (position)", "Retroceso de beneficio (posición)"),
+    short: L("Giveback", "Retroceso"),
+    description: L(
+      "Fires when you've given back a % of your position's maximum unrealized profit.",
+      "Se activa cuando devuelves un % del beneficio máximo no realizado de tu posición.",
+    ),
   },
 };
 
@@ -175,7 +188,13 @@ export interface AlertExplanation {
 
 /** Extra context computed from PeakAlert's own history (all optional). */
 export interface MarketContext {
-  risk?: { score: number; coverage: number; level: string; summary: string; factors: { label: string; score: number; available: boolean; value: string | null }[] };
+  risk?: {
+    score: number;
+    coverage: number;
+    level: string;
+    summary: L10n;
+    factors: { key: string; label: L10n; score: number; available: boolean; value: L10n | null }[];
+  };
   /** % change of pool liquidity vs. 1 h / 6 h ago (null = not enough history). */
   liquidityChange?: { "1h": number | null; "6h": number | null };
   /** Average price over the last 60 minutes (null = not enough history). */

@@ -26,5 +26,7 @@ export function Logo({ href = "/" }: { href?: string }) {
   );
 }
 
-export const DISCLAIMER =
-  "PeakAlert es una herramienta de monitoreo. Las alertas se basan en reglas que tú configuras sobre datos públicos de mercado; no son asesoramiento financiero ni predicciones. Los memecoins son extremadamente volátiles y puedes perder todo lo invertido.";
+export const DISCLAIMER = {
+  en: "PeakAlert is a monitoring tool. Alerts are based on rules you configure on public market data; they are not financial advice or predictions. Memecoins are extremely volatile and you can lose everything you invest.",
+  es: "PeakAlert es una herramienta de monitoreo. Las alertas se basan en reglas que tú configuras sobre datos públicos de mercado; no son asesoramiento financiero ni predicciones. Los memecoins son extremadamente volátiles y puedes perder todo lo invertido.",
+};

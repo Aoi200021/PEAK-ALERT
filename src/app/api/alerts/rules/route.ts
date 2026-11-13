@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, readJson, requireUser, zodMessage } from "@/lib/api";
 import { ALERT_META, ALERT_TYPES, PARAM_SCHEMAS, POSITION_ALERT_TYPES } from "@/lib/alerts/types";
 import { DEFAULT_COOLDOWN_MINUTES, planAllowsAlert, requiredPlanForAlert } from "@/lib/plans";
@@ -36,7 +37,10 @@ export const POST = handler(async (req: Request) => {
     throw new HttpError(
       403,
       "PLAN_FEATURE",
-      `"${ALERT_META[type].label}" requiere el plan ${requiredPlanForAlert(type) === "pro" ? "Pro" : "Free"} o superior.`,
+      L(
+        `"${ALERT_META[type].label.en}" requires the ${requiredPlanForAlert(type) === "pro" ? "Pro" : "Free"} plan or higher.`,
+        `"${ALERT_META[type].label.es}" requiere el plan ${requiredPlanForAlert(type) === "pro" ? "Pro" : "Free"} o superior.`,
+      ),
     );
   }
   const params = PARAM_SCHEMAS[type].safeParse(body.data.params);
@@ -45,15 +49,15 @@ export const POST = handler(async (req: Request) => {
   let positionId: string | null = null;
   if (POSITION_ALERT_TYPES.includes(type)) {
     // Position-based rule: must point to one of the user's OPEN positions on this token.
-    if (!body.data.positionId) throw new HttpError(400, "POSITION_REQUIRED", "Elige la posición que quieres proteger.");
+    if (!body.data.positionId) throw new HttpError(400, "POSITION_REQUIRED", L("Choose the position you want to protect.", "Elige la posición que quieres proteger."));
     const { data: pos } = await admin
       .from("positions")
       .select("id, token_id, exit_price")
       .eq("id", body.data.positionId)
       .eq("user_id", user.id)
       .maybeSingle();
-    if (!pos || pos.token_id !== tokenId) throw new HttpError(404, "NOT_FOUND", "Posición no encontrada.");
-    if (pos.exit_price != null) throw new HttpError(400, "POSITION_CLOSED", "La posición ya está cerrada.");
+    if (!pos || pos.token_id !== tokenId) throw new HttpError(404, "NOT_FOUND", L("Position not found.", "Posición no encontrada."));
+    if (pos.exit_price != null) throw new HttpError(400, "POSITION_CLOSED", L("The position is already closed.", "La posición ya está cerrada."));
     positionId = pos.id;
   } else {
     const { data: watched } = await admin
@@ -62,7 +66,7 @@ export const POST = handler(async (req: Request) => {
       .eq("user_id", user.id)
       .eq("token_id", tokenId)
       .maybeSingle();
-    if (!watched) throw new HttpError(400, "NOT_WATCHING", "Primero agrega el token a tu lista.");
+    if (!watched) throw new HttpError(400, "NOT_WATCHING", L("Add the token to your watchlist first.", "Primero agrega el token a tu lista."));
   }
 
   const { count } = await admin
@@ -71,7 +75,7 @@ export const POST = handler(async (req: Request) => {
     .eq("user_id", user.id)
     .eq("token_id", tokenId);
   if ((count ?? 0) >= MAX_RULES_PER_TOKEN)
-    throw new HttpError(400, "TOO_MANY_RULES", `Máximo ${MAX_RULES_PER_TOKEN} alertas por token.`);
+    throw new HttpError(400, "TOO_MANY_RULES", L(`Maximum ${MAX_RULES_PER_TOKEN} alerts per token.`, `Máximo ${MAX_RULES_PER_TOKEN} alertas por token.`));
 
   const cooldown = plan.customCooldown
     ? (body.data.cooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES)

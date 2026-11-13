@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, requireUser } from "@/lib/api";
 import { changeAfterAlertPct } from "@/lib/paper-exit";
 import type { Checkpoints } from "@/lib/paper-exit";
@@ -9,7 +10,7 @@ import type { Checkpoints } from "@/lib/paper-exit";
  */
 export const GET = handler(async () => {
   const { user, plan, admin } = await requireUser();
-  if (!plan.analytics) throw new HttpError(403, "PLAN_FEATURE", "Las analíticas avanzadas son una función Premium.");
+  if (!plan.analytics) throw new HttpError(403, "PLAN_FEATURE", L("Advanced analytics is a Premium feature.", "Las analíticas avanzadas son una función Premium."));
 
   const { data, error } = await admin
     .from("paper_exits")

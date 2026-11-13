@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { analyzePublicAddress } from "@/lib/market/public";
 import { MarketApiError } from "@/lib/market/dexscreener";
 import { addressSchema } from "@/lib/validation";
+import { pickMsg } from "@/lib/i18n";
+import { localeFromRequest } from "@/lib/i18n/server";
 
 /**
  * Public, unauthenticated token analysis for the demo page.
@@ -26,28 +28,30 @@ function limited(ip: string): boolean {
 }
 
 export async function GET(req: Request) {
+  const locale = localeFromRequest(req);
+  const tr = (en: string, es: string) => (locale === "es" ? es : en);
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
   if (limited(ip)) {
     return NextResponse.json(
-      { error: { code: "RATE_LIMITED", message: "Demasiadas búsquedas. Espera unos minutos o crea una cuenta gratis." } },
+      { error: { code: "RATE_LIMITED", message: tr("Too many searches. Wait a few minutes or create a free account.", "Demasiadas búsquedas. Espera unos minutos o crea una cuenta gratis.") } },
       { status: 429 },
     );
   }
   const parsed = addressSchema.safeParse(new URL(req.url).searchParams.get("address") ?? "");
   if (!parsed.success) {
-    return NextResponse.json({ error: { code: "INVALID_ADDRESS", message: parsed.error.issues[0]?.message ?? "Dirección no válida" } }, { status: 400 });
+    return NextResponse.json({ error: { code: "INVALID_ADDRESS", message: pickMsg(parsed.error.issues[0]?.message ?? tr("Invalid address", "Dirección no válida"), locale) } }, { status: 400 });
   }
   try {
     const tokens = await analyzePublicAddress(parsed.data);
     if (!tokens.length) {
       return NextResponse.json(
-        { error: { code: "TOKEN_NOT_FOUND", message: "DexScreener no tiene datos de precio para esta dirección en las redes soportadas." } },
+        { error: { code: "TOKEN_NOT_FOUND", message: tr("DexScreener has no price data for this address on supported chains.", "DexScreener no tiene datos de precio para esta dirección en las redes soportadas.") } },
         { status: 404 },
       );
     }
     return NextResponse.json({ tokens, fetchedAt: new Date().toISOString() });
   } catch (e) {
-    const msg = e instanceof MarketApiError ? e.message : "No se pudo consultar el token.";
-    return NextResponse.json({ error: { code: "MARKET_API", message: msg } }, { status: 503 });
+    const m = e instanceof MarketApiError ? pickMsg(e.message, locale) : tr("Couldn't fetch the token.", "No se pudo consultar el token.");
+    return NextResponse.json({ error: { code: "MARKET_API", message: m } }, { status: 503 });
   }
 }

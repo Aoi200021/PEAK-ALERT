@@ -14,19 +14,25 @@ import { formatDateTime, formatPrice, formatUsd, timeAgo, toNum } from "@/lib/fo
 import { positionPnl } from "@/lib/portfolio";
 import { protectionSummary } from "@/lib/protection";
 import { RiskBadge } from "@/components/risk";
+import { useI18n } from "@/lib/i18n/client";
 
 type Filter = "open" | "closed" | "all";
 
 export default function PortfolioPage() {
+  const { t: tr } = useI18n();
   const { data: me } = useSWR<MeResponse>("/api/me", fetcher);
   if (me && !me.plan.portfolio) {
     return (
       <>
         <PageHeader title="Profit Protection" />
         <Panel>
-          <EmptyState icon={<Lock size={24} strokeWidth={1.5} />} title="Profit Protection está disponible en Pro y Premium" action={<Link href="/pricing"><Button variant="primary">Ver planes</Button></Link>}>
-            Registra tu entrada (precio o market cap) y monto invertido para ver tu ROI, el beneficio máximo que llegaste a tener, cuánto has
-            devuelto y alertas de trailing stop.
+          <EmptyState icon={<Lock size={24} strokeWidth={1.5} />} title={tr("Profit Protection is available on Pro and Premium", "Profit Protection está disponible en Pro y Premium")}
+            action={<Link href="/pricing"><Button variant="primary">{tr("See plans", "Ver planes")}</Button></Link>}
+          >
+            {tr(
+              "Record your entry (price or market cap) and amount invested to see your ROI, the max profit you reached, how much you've given back, and trailing-stop alerts.",
+              "Registra tu entrada (precio o market cap) y monto invertido para ver tu ROI, el beneficio máximo que llegaste a tener, cuánto has devuelto y alertas de trailing stop.",
+            )}
           </EmptyState>
         </Panel>
       </>
@@ -36,6 +42,7 @@ export default function PortfolioPage() {
 }
 
 function PortfolioView() {
+  const { t: tr, locale } = useI18n();
   // Watchlist refresh keeps prices fresh for tokens you follow.
   const { data: wl } = useSWR<WatchlistResponse>("/api/watchlist", fetcher, { refreshInterval: 30_000 });
   const { data, error, isLoading, mutate } = useSWR<{ positions: PositionDTO[] }>("/api/positions", fetcher, { refreshInterval: 30_000 });
@@ -61,7 +68,7 @@ function PortfolioView() {
   const unrealized = openValue != null ? openValue - openInvested : null;
 
   async function remove(p: PositionDTO) {
-    if (!confirm("¿Eliminar este registro?")) return;
+    if (!confirm(tr("Delete this record?", "¿Eliminar este registro?"))) return;
     await api(`/api/positions/${p.id}`, { method: "DELETE" }).catch(() => null);
     mutate();
   }
@@ -76,15 +83,18 @@ function PortfolioView() {
     <>
       <PageHeader
         title="Profit Protection"
-        sub="Tus posiciones, el beneficio máximo que alcanzaron y cuánto has devuelto. Estimaciones sin comisiones, slippage ni impuestos."
-        actions={<Button variant="primary" onClick={() => setCreating(true)}><Plus size={15} /> Registrar posición</Button>}
+        sub={tr(
+          "Your positions, the max profit they reached and how much you've given back. Estimates without fees, slippage or taxes.",
+          "Tus posiciones, el beneficio máximo que alcanzaron y cuánto has devuelto. Estimaciones sin comisiones, slippage ni impuestos.",
+        )}
+        actions={<Button variant="primary" onClick={() => setCreating(true)}><Plus size={15} /> {tr("Add position", "Registrar posición")}</Button>}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-4">
-        <Stat label="Invertido (abiertas)" value={formatUsd(openInvested)} />
-        <Stat label="Valor estimado (abiertas)" value={formatUsd(openValue)} />
-        <Stat label="P&L no realizado" value={unrealized == null ? "—" : `${unrealized >= 0 ? "+" : ""}${formatUsd(unrealized)}`} tone={unrealized} />
-        <Stat label="P&L realizado" value={`${realized >= 0 ? "+" : ""}${formatUsd(realized)}`} tone={realized} />
+        <Stat label={tr("Invested (open)", "Invertido (abiertas)")} value={formatUsd(openInvested)} />
+        <Stat label={tr("Estimated value (open)", "Valor estimado (abiertas)")} value={formatUsd(openValue)} />
+        <Stat label={tr("Unrealized P&L", "P&L no realizado")} value={unrealized == null ? "—" : `${unrealized >= 0 ? "+" : ""}${formatUsd(unrealized)}`} tone={unrealized} />
+        <Stat label={tr("Realized P&L", "P&L realizado")} value={`${realized >= 0 ? "+" : ""}${formatUsd(realized)}`} tone={realized} />
       </div>
 
       {error && <ErrorNote>{error.message}</ErrorNote>}
@@ -95,17 +105,17 @@ function PortfolioView() {
             value={filter}
             onChange={setFilter}
             options={[
-              { value: "open", label: `Abiertas (${open.length})` },
-              { value: "closed", label: `Cerradas (${rows.length - open.length})` },
-              { value: "all", label: "Todas" },
+              { value: "open", label: `${tr("Open", "Abiertas")} (${open.length})` },
+              { value: "closed", label: `${tr("Closed", "Cerradas")} (${rows.length - open.length})` },
+              { value: "all", label: tr("All", "Todas") },
             ]}
           />
         </div>
         {isLoading ? (
           <div className="space-y-2 p-4"><Skeleton className="h-12" /><Skeleton className="h-12" /></div>
         ) : shown.length === 0 ? (
-          <EmptyState icon={<BriefcaseBusiness size={26} strokeWidth={1.5} />} title="Sin posiciones">
-            Registra una compra para seguir su rendimiento.
+          <EmptyState icon={<BriefcaseBusiness size={26} strokeWidth={1.5} />} title={tr("No positions", "Sin posiciones")}>
+            {tr("Record a purchase to track its performance.", "Registra una compra para seguir su rendimiento.")}
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
@@ -113,15 +123,15 @@ function PortfolioView() {
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="px-4 py-2.5 font-medium">Token</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Invertido</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Entrada</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Actual / Venta</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Valor</th>
+                  <th className="px-3 py-2.5 text-right font-medium">{tr("Invested", "Invertido")}</th>
+                  <th className="px-3 py-2.5 text-right font-medium">{tr("Entry", "Entrada")}</th>
+                  <th className="px-3 py-2.5 text-right font-medium">{tr("Current / Sale", "Actual / Venta")}</th>
+                  <th className="px-3 py-2.5 text-right font-medium">{tr("Value", "Valor")}</th>
                   <th className="px-3 py-2.5 text-right font-medium">P&amp;L</th>
                   <th className="px-3 py-2.5 text-right font-medium">ROI</th>
-                  <th className="px-3 py-2.5 text-right font-medium" title="Beneficio máximo no realizado desde la entrada">Máx. benef.</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Desde máx.</th>
-                  <th className="px-3 py-2.5 text-right font-medium">Riesgo</th>
+                  <th className="px-3 py-2.5 text-right font-medium" title={tr("Max unrealized profit since entry", "Beneficio máximo no realizado desde la entrada")}>{tr("Max profit", "Máx. benef.")}</th>
+                  <th className="px-3 py-2.5 text-right font-medium">{tr("From high", "Desde máx.")}</th>
+                  <th className="px-3 py-2.5 text-right font-medium">{tr("Risk", "Riesgo")}</th>
                   <th className="px-3 py-2.5" />
                 </tr>
               </thead>
@@ -136,7 +146,7 @@ function PortfolioView() {
                             <span className="font-medium">{p.token?.symbol}</span>
                             {p.token && <ChainTag chain={p.token.chain_id} />}
                           </div>
-                          <p className="text-[11px] text-faint">Compra {formatDateTime(p.entry_at)}</p>
+                          <p className="text-[11px] text-faint">{tr("Bought", "Compra")} {formatDateTime(p.entry_at, locale)}</p>
                         </div>
                       </Link>
                     </td>
@@ -144,9 +154,9 @@ function PortfolioView() {
                     <td className="num px-3 py-2.5 text-right">{formatPrice(toNum(p.entry_price))}</td>
                     <td className="num px-3 py-2.5 text-right">
                       {closed ? (
-                        <span>{formatPrice(toNum(p.exit_price))} <Badge className="ml-1">venta</Badge></span>
+                        <span>{formatPrice(toNum(p.exit_price))} <Badge className="ml-1">{tr("sale", "venta")}</Badge></span>
                       ) : (
-                        <span title={p.token?.data_updated_at ? `Actualizado ${timeAgo(p.token.data_updated_at)}` : undefined}>
+                        <span title={p.token?.data_updated_at ? `${tr("Updated", "Actualizado")} ${timeAgo(p.token.data_updated_at, undefined, locale)}` : undefined}>
                           {formatPrice(toNum(p.token?.price_usd))}
                         </span>
                       )}
@@ -161,13 +171,13 @@ function PortfolioView() {
                     <td className="px-3 py-2.5 text-right">{closed ? <span className="text-faint">—</span> : <RiskBadge score={p.token?.risk_score} size="sm" />}</td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex justify-end gap-1">
-                        <Link href={`/portfolio/${p.id}`}><Button size="sm" variant="primary">Protección</Button></Link>
+                        <Link href={`/portfolio/${p.id}`}><Button size="sm" variant="primary">{tr("Protection", "Protección")}</Button></Link>
                         {closed ? (
-                          <Button size="sm" variant="ghost" onClick={() => reopen(p)}>Reabrir</Button>
+                          <Button size="sm" variant="ghost" onClick={() => reopen(p)}>{tr("Reopen", "Reabrir")}</Button>
                         ) : (
-                          <Button size="sm" onClick={() => setClosing(p)}>Registrar venta</Button>
+                          <Button size="sm" onClick={() => setClosing(p)}>{tr("Record sale", "Registrar venta")}</Button>
                         )}
-                        <Button size="sm" variant="ghost" onClick={() => remove(p)}>Eliminar</Button>
+                        <Button size="sm" variant="ghost" onClick={() => remove(p)}>{tr("Delete", "Eliminar")}</Button>
                       </div>
                     </td>
                   </tr>
@@ -178,14 +188,17 @@ function PortfolioView() {
         )}
       </Panel>
 
-      <Modal open={creating} onClose={() => setCreating(false)} title="Registrar posición">
+      <Modal open={creating} onClose={() => setCreating(false)} title={tr("Add position", "Registrar posición")}>
         <div className="space-y-4">
           {!wl?.tokens.length ? (
-            <InfoNote>Primero agrega el token a tu lista desde el <Link href="/dashboard" className="text-text underline">dashboard</Link>.</InfoNote>
+            <InfoNote>
+              {tr("First add the token to your watchlist from the", "Primero agrega el token a tu lista desde el")}{" "}
+              <Link href="/dashboard" className="text-text underline">dashboard</Link>.
+            </InfoNote>
           ) : (
             <Field label="Token">
               <Select value={tokenId} onChange={(e) => setTokenId(e.target.value)}>
-                <option value="">Selecciona un token…</option>
+                <option value="">{tr("Select a token…", "Selecciona un token…")}</option>
                 {wl.tokens.map((t) => (
                   <option key={t.id} value={t.id}>{t.symbol} · {formatPrice(toNum(t.price_usd))}</option>
                 ))}
@@ -207,7 +220,7 @@ function PortfolioView() {
           )}
         </div>
       </Modal>
-      <Modal open={!!closing} onClose={() => setClosing(null)} title="Registrar venta">
+      <Modal open={!!closing} onClose={() => setClosing(null)} title={tr("Record sale", "Registrar venta")}>
         {closing && (
           <ClosePositionForm
             position={closing}

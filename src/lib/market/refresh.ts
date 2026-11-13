@@ -8,6 +8,7 @@ import { advancePaperExit, type PaperExitRow } from "../paper-exit";
 import { avgPriceLastHour, liquidityChangePct, parseSeriesRow } from "../risk/context";
 import { computeMomentum, computeRisk, type RiskMarket, type SeriesPoint } from "../risk/score";
 import { getPlan } from "../plans";
+import { msg, type Locale } from "../i18n";
 import { birdeyeEnabled, fetchBirdeyeRow } from "./birdeye";
 import { fetchPairsForChain, MarketApiError, pairToTokenRow, type MarketRow } from "./dexscreener";
 
@@ -148,7 +149,7 @@ export async function refreshTokens(
       const raw = await fetchPairsForChain(chainId, list.map((t) => t.address));
       pairs = new Map([...raw].filter(([, p]) => p.priceUsd != null).map(([a, p]) => [a, pairToTokenRow(p)]));
     } catch (e) {
-      chainError = e instanceof MarketApiError ? e.message : "Error al consultar DexScreener";
+      chainError = e instanceof MarketApiError ? e.message : msg("Error querying DexScreener", "Error al consultar DexScreener");
       summary.errors.push(`${chainId}: ${chainError}`);
     }
     for (const t of list) {
@@ -161,7 +162,7 @@ export async function refreshTokens(
       }
       if (!row || row.price_usd == null) {
         if (!chainError) summary.missing++;
-        failures.push({ id: t.id, error: chainError ?? "Sin datos de mercado disponibles para este token" });
+        failures.push({ id: t.id, error: chainError ?? msg("No market data available for this token", "Sin datos de mercado disponibles para este token") });
         continue;
       }
       const price = row.price_usd;
@@ -181,7 +182,7 @@ export async function refreshTokens(
           coverage: risk.coverage,
           level: risk.level,
           summary: risk.summary,
-          factors: risk.factors.map((f) => ({ label: f.label, score: f.score, available: f.available, value: f.value })),
+          factors: risk.factors.map((f) => ({ key: f.key, label: f.label, score: f.score, available: f.available, value: f.value })),
         },
         liquidityChange: {
           "1h": liquidityChangePct(hist, row.liquidity_usd, 3600_000, now.getTime()),
@@ -320,6 +321,14 @@ async function evaluateRulesFor(
     .in("token_id", [...byId.keys()]);
   if (error) throw error;
 
+  // Each user gets alert texts in their own language.
+  const userIds = [...new Set(((rules ?? []) as RuleRow[]).map((r) => r.user_id))];
+  const locales = new Map<string, Locale>();
+  if (userIds.length) {
+    const { data: profs } = await admin.from("profiles").select("id, locale").in("id", userIds);
+    for (const p of profs ?? []) locales.set(p.id, p.locale === "es" ? "es" : "en");
+  }
+
   let fired = 0;
   for (const rule of (rules ?? []) as RuleRow[]) {
     const token = byId.get(rule.token_id)!;
@@ -341,6 +350,7 @@ async function evaluateRulesFor(
       },
       market,
       now,
+      locales.get(rule.user_id) ?? "en",
     );
 
     const changed =

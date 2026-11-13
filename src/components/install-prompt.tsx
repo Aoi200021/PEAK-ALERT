@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Download, Share, X } from "lucide-react";
 import { Button } from "./ui";
+import { useI18n } from "@/lib/i18n/client";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -26,6 +27,7 @@ function dismissedRecently() {
  * iPhone/iPad Safari: shows the Share → Add to Home Screen steps (iOS has no install API).
  */
 export function InstallPrompt() {
+  const { t } = useI18n();
   const [evt, setEvt] = useState<BeforeInstallPromptEvent | null>(null);
   const [ios, setIos] = useState(false);
   const [hidden, setHidden] = useState(true);
@@ -78,22 +80,23 @@ export function InstallPrompt() {
       {/* eslint-disable-next-line @next/next/no-img-element -- local static icon */}
       <img src="/icon-192.png" alt="" width={36} height={36} className="shrink-0 rounded-lg" />
       <div className="min-w-0 flex-1">
-        <p className="font-medium">Instala PeakAlert</p>
+        <p className="font-medium">{t("Install PeakAlert", "Instala PeakAlert")}</p>
         {ios ? (
           <p className="mt-0.5 text-xs leading-relaxed text-muted">
-            Pulsa <Share size={12} className="inline -mt-0.5" /> <b className="text-text">Compartir</b> y luego{" "}
-            <b className="text-text">Añadir a pantalla de inicio</b>. Así se abre como app y puedes recibir notificaciones (iOS 16.4+).
+            {t("Tap", "Pulsa")} <Share size={12} className="inline -mt-0.5" /> <b className="text-text">{t("Share", "Compartir")}</b>{" "}
+            {t("then", "y luego")} <b className="text-text">{t("Add to Home Screen", "Añadir a pantalla de inicio")}</b>.{" "}
+            {t("It opens like an app and can receive notifications (iOS 16.4+).", "Así se abre como app y puedes recibir notificaciones (iOS 16.4+).")}
           </p>
         ) : (
-          <p className="mt-0.5 text-xs text-muted">Ábrela como app desde tu pantalla de inicio y recibe las alertas al instante.</p>
+          <p className="mt-0.5 text-xs text-muted">{t("Open it as an app from your home screen and get alerts instantly.", "Ábrela como app desde tu pantalla de inicio y recibe las alertas al instante.")}</p>
         )}
         {evt && (
           <Button size="sm" variant="primary" className="mt-2" onClick={install}>
-            <Download size={13} /> Instalar
+            <Download size={13} /> {t("Install", "Instalar")}
           </Button>
         )}
       </div>
-      <button onClick={dismiss} className="rounded p-1 text-faint hover:text-text" aria-label="Cerrar">
+      <button onClick={dismiss} className="rounded p-1 text-faint hover:text-text" aria-label={t("Close", "Cerrar")}>
         <X size={15} />
       </button>
     </div>

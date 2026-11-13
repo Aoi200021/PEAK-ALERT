@@ -7,6 +7,7 @@ import { formatPct, formatPrice, formatUsdCompact, shortAddress } from "@/lib/fo
 import { detectAddressKind } from "@/lib/validation";
 import { Button, ErrorNote, InfoNote, Input, Modal, cn } from "./ui";
 import { ChainTag, TokenAvatar } from "./token-bits";
+import { useI18n } from "@/lib/i18n/client";
 
 interface Candidate {
   chainId: string;
@@ -33,6 +34,7 @@ export function AddTokenDialog({
   onClose: () => void;
   onAdded: (tokenId: string) => void;
 }) {
+  const { t, locale } = useI18n();
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -54,7 +56,7 @@ export function AddTokenDialog({
     setCandidates(null);
     const a = address.trim();
     if (!detectAddressKind(a)) {
-      setError("Formato no válido. Pega la contract address (EVM 0x…, Solana, Sui o TON).");
+      setError(t("Invalid format. Paste the contract address (EVM 0x…, Solana, Sui or TON).", "Formato no válido. Pega la contract address (EVM 0x…, Solana, Sui o TON)."));
       return;
     }
     setLoading(true);
@@ -66,7 +68,7 @@ export function AddTokenDialog({
       setSelected(r.candidates[0]?.chainId ?? null);
       setFetchedAt(r.fetchedAt);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo consultar el token.");
+      setError(err instanceof ApiError ? err.message : t("Couldn't fetch the token.", "No se pudo consultar el token."));
     } finally {
       setLoading(false);
     }
@@ -85,7 +87,7 @@ export function AddTokenDialog({
       reset();
       onAdded(r.tokenId);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "No se pudo agregar el token.");
+      setError(err instanceof ApiError ? err.message : t("Couldn't add the token.", "No se pudo agregar el token."));
     } finally {
       setAdding(false);
     }
@@ -98,7 +100,7 @@ export function AddTokenDialog({
         reset();
         onClose();
       }}
-      title="Agregar token"
+      title={t("Add token", "Agregar token")}
     >
       <form onSubmit={lookup} className="flex gap-2">
         <Input
@@ -112,10 +114,10 @@ export function AddTokenDialog({
           aria-label="Contract address"
         />
         <Button type="submit" variant="primary" loading={loading} disabled={!address.trim()}>
-          <Search size={14} /> Buscar
+          <Search size={14} /> {t("Search", "Buscar")}
         </Button>
       </form>
-      <p className="mt-2 text-[11px] text-faint">Datos de DexScreener. Se usa el par con más liquidez en cada red.</p>
+      <p className="mt-2 text-[11px] text-faint">{t("Data from DexScreener. The most liquid pair on each chain is used.", "Datos de DexScreener. Se usa el par con más liquidez en cada red.")}</p>
 
       {error && <div className="mt-4"><ErrorNote>{error}</ErrorNote></div>}
 
@@ -123,7 +125,10 @@ export function AddTokenDialog({
         <div className="mt-5 space-y-2">
           {candidates.length > 1 && (
             <InfoNote>
-              Esta dirección existe en {candidates.length} redes. Elige la correcta — en otras redes puede ser un token distinto.
+              {t(
+                `This address exists on ${candidates.length} chains. Pick the right one — on other chains it may be a different token.`,
+                `Esta dirección existe en ${candidates.length} redes. Elige la correcta — en otras redes puede ser un token distinto.`,
+              )}
             </InfoNote>
           )}
           {candidates.map((c) => (
@@ -144,7 +149,7 @@ export function AddTokenDialog({
                     <ChainTag chain={c.chainId} />
                   </div>
                   <p className="truncate text-xs text-muted">
-                    {c.name ?? "Sin nombre"} · <span className="num">{shortAddress(c.address)}</span>
+                    {c.name ?? t("No name", "Sin nombre")} · <span className="num">{shortAddress(c.address)}</span>
                   </p>
                 </div>
                 <div className="text-right">
@@ -160,7 +165,7 @@ export function AddTokenDialog({
                   <dd className="num">{formatUsdCompact(c.marketCap ?? c.fdv)}{c.marketCap == null && c.fdv != null ? " (FDV)" : ""}</dd>
                 </div>
                 <div>
-                  <dt className="text-faint">Liquidez</dt>
+                  <dt className="text-faint">{t("Liquidity", "Liquidez")}</dt>
                   <dd className={cn("num", (c.liquidityUsd ?? 0) < 10_000 && "text-warn")}>{formatUsdCompact(c.liquidityUsd)}</dd>
                 </div>
                 <div>
@@ -169,15 +174,15 @@ export function AddTokenDialog({
                 </div>
               </dl>
               {(c.liquidityUsd ?? 0) < 10_000 && (
-                <p className="mt-2 text-[11px] text-warn">Liquidez muy baja: los precios pueden ser poco fiables.</p>
+                <p className="mt-2 text-[11px] text-warn">{t("Very low liquidity: prices may be unreliable.", "Liquidez muy baja: los precios pueden ser poco fiables.")}</p>
               )}
             </button>
           ))}
           {fetchedAt && (
-            <p className="text-[11px] text-faint">Consultado {new Date(fetchedAt).toLocaleTimeString("es")}</p>
+            <p className="text-[11px] text-faint">{t("Fetched", "Consultado")} {new Date(fetchedAt).toLocaleTimeString(locale === "es" ? "es" : "en-US")}</p>
           )}
           <Button variant="primary" className="mt-2 w-full" onClick={add} loading={adding} disabled={!selected}>
-            Seguir token
+            {t("Follow token", "Seguir token")}
           </Button>
         </div>
       )}

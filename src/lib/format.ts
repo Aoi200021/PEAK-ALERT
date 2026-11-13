@@ -58,24 +58,26 @@ export function formatNumber(value: number | null | undefined): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 4 });
 }
 
-export function timeAgo(date: string | Date | null | undefined, now: number = Date.now()): string {
-  if (!date) return "nunca";
+export function timeAgo(date: string | Date | null | undefined, now: number = Date.now(), locale: "en" | "es" = "en"): string {
+  const es = locale === "es";
+  if (!date) return es ? "nunca" : "never";
   const t = typeof date === "string" ? Date.parse(date) : date.getTime();
   if (!Number.isFinite(t)) return DASH;
   const s = Math.max(0, Math.round((now - t) / 1000));
-  if (s < 5) return "ahora";
-  if (s < 60) return `hace ${s}s`;
+  if (s < 5) return es ? "ahora" : "just now";
+  const ago = (v: string) => (es ? `hace ${v}` : `${v} ago`);
+  if (s < 60) return ago(`${s}s`);
   const m = Math.floor(s / 60);
-  if (m < 60) return `hace ${m} min`;
+  if (m < 60) return ago(`${m} min`);
   const h = Math.floor(m / 60);
-  if (h < 48) return `hace ${h} h`;
-  return `hace ${Math.floor(h / 24)} d`;
+  if (h < 48) return ago(`${h} h`);
+  return ago(`${Math.floor(h / 24)} d`);
 }
 
-export function formatDateTime(date: string | Date | null | undefined): string {
+export function formatDateTime(date: string | Date | null | undefined, locale: "en" | "es" = "en"): string {
   if (!date) return DASH;
   const d = typeof date === "string" ? new Date(date) : date;
-  return d.toLocaleString("es", {
+  return d.toLocaleString(locale === "es" ? "es" : "en-US", {
     day: "2-digit",
     month: "short",
     hour: "2-digit",

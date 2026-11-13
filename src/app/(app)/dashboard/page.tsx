@@ -15,6 +15,8 @@ import { Badge, Button, Delta, EmptyState, ErrorNote, InfoNote, Panel, PanelHead
 import { api, ApiError, fetcher } from "@/lib/client/api";
 import type { EventDTO, RuleDTO, TokenDTO, WatchlistResponse } from "@/lib/client/types";
 import { formatPrice, formatUsdCompact, timeAgo, toNum } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/client";
+import { pickMsg } from "@/lib/i18n";
 
 function pctBetween(from: unknown, to: unknown): number | null {
   const a = toNum(from);
@@ -25,6 +27,7 @@ function pctBetween(from: unknown, to: unknown): number | null {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { t: tr, p: pl, locale } = useI18n();
   const [adding, setAdding] = useState(false);
   const { data, error, isLoading, mutate } = useSWR<WatchlistResponse>("/api/watchlist", fetcher, {
     refreshInterval: 30_000,
@@ -51,12 +54,12 @@ export default function DashboardPage() {
   const byMomentum = tokens.filter((t) => t.momentum_score != null).sort((a, b) => (b.momentum_score ?? 0) - (a.momentum_score ?? 0)).slice(0, 4);
 
   async function remove(t: TokenDTO) {
-    if (!confirm(`¿Dejar de seguir ${t.symbol}? Se eliminarán también tus alertas de este token.`)) return;
+    if (!confirm(tr(`Stop following ${t.symbol}? Your alerts for this token will also be deleted.`, `¿Dejar de seguir ${t.symbol}? Se eliminarán también tus alertas de este token.`))) return;
     try {
       await api(`/api/watchlist/${t.id}`, { method: "DELETE" });
       mutate();
     } catch (e) {
-      alert(e instanceof ApiError ? e.message : "No se pudo eliminar");
+      alert(e instanceof ApiError ? e.message : tr("Couldn't remove", "No se pudo eliminar"));
     }
   }
 
@@ -66,29 +69,33 @@ export default function DashboardPage() {
         title="Dashboard"
         sub={<DataAge at={lastUpdate} />}
         actions={
-          <Button variant="primary" onClick={() => setAdding(true)} disabled={atLimit} title={atLimit ? "Límite del plan alcanzado" : undefined}>
-            <Plus size={15} /> Agregar token
+          <Button variant="primary" onClick={() => setAdding(true)} disabled={atLimit} title={atLimit ? tr("Plan limit reached", "Límite del plan alcanzado") : undefined}>
+            <Plus size={15} /> {tr("Add token", "Agregar token")}
           </Button>
         }
       />
 
       {/* KPIs */}
       <div className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line md:grid-cols-4">
-        <Stat label="Tokens monitoreados" value={data ? `${tokens.length} / ${data.limit}` : null} />
-        <Stat label="Riesgo medio de agotamiento" value={data ? (avgRisk == null ? "—" : String(avgRisk)) : null} badge={avgRisk != null ? <RiskBadge score={avgRisk} size="sm" /> : null} />
-        <Stat label="En riesgo elevado (>60)" value={data ? String(highRisk) : null} tone={highRisk > 0 ? "text-orange" : undefined} />
-        <Stat label="Alertas en 24 h" value={events ? String(alerts24h) : null} sub={rules ? `${rules.rules.filter((r) => r.enabled).length} reglas activas` : undefined} />
+        <Stat label={tr("Tokens tracked", "Tokens monitoreados")} value={data ? `${tokens.length} / ${data.limit}` : null} />
+        <Stat label={tr("Average exhaustion risk", "Riesgo medio de agotamiento")} value={data ? (avgRisk == null ? "—" : String(avgRisk)) : null} badge={avgRisk != null ? <RiskBadge score={avgRisk} size="sm" /> : null} />
+        <Stat label={tr("At elevated risk (>60)", "En riesgo elevado (>60)")} value={data ? String(highRisk) : null} tone={highRisk > 0 ? "text-orange" : undefined} />
+        <Stat
+          label={tr("Alerts in 24h", "Alertas en 24 h")}
+          value={events ? String(alerts24h) : null}
+          sub={rules ? tr(`${rules.rules.filter((r) => r.enabled).length} active rules`, `${rules.rules.filter((r) => r.enabled).length} reglas activas`) : undefined}
+        />
       </div>
 
       {atLimit && (
         <div className="mb-4">
           <InfoNote>
-            Alcanzaste el límite de {data!.limit} tokens de tu plan.{" "}
-            <Link href="/pricing" className="text-text underline underline-offset-2">Ver planes</Link>
+            {tr(`You've reached your plan's limit of ${data!.limit} tokens.`, `Alcanzaste el límite de ${data!.limit} tokens de tu plan.`)}{" "}
+            <Link href="/pricing" className="text-text underline underline-offset-2">{tr("See plans", "Ver planes")}</Link>
           </InfoNote>
         </div>
       )}
-      {data?.refreshError && <div className="mb-4"><InfoNote tone="warn">{data.refreshError}</InfoNote></div>}
+      {data?.refreshError && <div className="mb-4"><InfoNote tone="warn">{pickMsg(data.refreshError, locale)}</InfoNote></div>}
       {error && !data && <ErrorNote>{error.message}</ErrorNote>}
 
       {isLoading && !data ? (
@@ -97,15 +104,17 @@ export default function DashboardPage() {
         <Panel>
           <EmptyState
             icon={<Radar size={28} strokeWidth={1.5} />}
-            title="Aún no monitoreas ningún token"
+            title={tr("You're not tracking any tokens yet", "Aún no monitoreas ningún token")}
             action={
               <Button variant="primary" onClick={() => setAdding(true)}>
-                <Plus size={15} /> Agregar por contract address
+                <Plus size={15} /> {tr("Add by contract address", "Agregar por contract address")}
               </Button>
             }
           >
-            Pega la dirección del contrato de un memecoin. PeakAlert empezará a registrar su precio, calcular su riesgo de agotamiento y
-            vigilar tus alertas.
+            {tr(
+              "Paste a memecoin's contract address. PeakAlert will start recording its price, computing its exhaustion risk and watching your alerts.",
+              "Pega la dirección del contrato de un memecoin. PeakAlert empezará a registrar su precio, calcular su riesgo de agotamiento y vigilar tus alertas.",
+            )}
           </EmptyState>
         </Panel>
       ) : (
@@ -119,17 +128,17 @@ export default function DashboardPage() {
           {/* Rankings + alerts */}
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             <RankPanel
-              title="Mayor riesgo de agotamiento"
+              title={tr("Highest exhaustion risk", "Mayor riesgo de agotamiento")}
               icon={<ShieldAlert size={14} className="text-orange" />}
               tokens={byRisk}
-              empty="Se calcula con cada actualización."
+              empty={tr("Calculated with every update.", "Se calcula con cada actualización.")}
               right={(t) => <RiskBadge score={t.risk_score} coverage={toNum(t.risk_coverage)} size="sm" />}
             />
             <RankPanel
-              title="Mayor momentum"
+              title={tr("Strongest momentum", "Mayor momentum")}
               icon={<TrendingUp size={14} className="text-up" />}
               tokens={byMomentum}
-              empty="Sin datos de momentum todavía."
+              empty={tr("No momentum data yet.", "Sin datos de momentum todavía.")}
               right={(t) => (
                 <span className="num text-xs">
                   <span className="text-text">{t.momentum_score}</span>
@@ -139,13 +148,18 @@ export default function DashboardPage() {
               )}
             />
             <Panel className="md:col-span-2 xl:col-span-1">
-              <PanelHeader title="Alertas recientes" actions={<Link href="/alerts?tab=history" className="text-xs text-muted hover:text-text">Ver todo</Link>} />
+              <PanelHeader
+                title={tr("Recent alerts", "Alertas recientes")}
+                actions={<Link href="/alerts?tab=history" className="text-xs text-muted hover:text-text">{tr("View all", "Ver todo")}</Link>}
+              />
               {!events ? (
                 <div className="space-y-2 p-4"><Skeleton className="h-10" /><Skeleton className="h-10" /></div>
               ) : events.events.length === 0 ? (
                 <p className="px-4 py-8 text-center text-xs text-muted">
-                  Sin alertas todavía.{" "}
-                  {(rules?.rules.length ?? 0) === 0 && <Link href="/alerts" className="text-text underline underline-offset-2">Crea tu primera alerta</Link>}
+                  {tr("No alerts yet.", "Sin alertas todavía.")}{" "}
+                  {(rules?.rules.length ?? 0) === 0 && (
+                    <Link href="/alerts" className="text-text underline underline-offset-2">{tr("Create your first alert", "Crea tu primera alerta")}</Link>
+                  )}
                 </p>
               ) : (
                 <ul className="divide-y divide-line">
@@ -157,7 +171,7 @@ export default function DashboardPage() {
                           <div className="min-w-0">
                             <p className="truncate text-[13px]">{e.title}</p>
                             <div className="mt-0.5 flex items-center gap-2 text-[11px] text-faint">
-                              <SeverityBadge severity={e.severity} /> {timeAgo(e.created_at)}
+                              <SeverityBadge severity={e.severity} /> {timeAgo(e.created_at, undefined, locale)}
                             </div>
                           </div>
                         </div>
@@ -171,20 +185,20 @@ export default function DashboardPage() {
 
           {/* Watchlist */}
           <Panel className="overflow-hidden">
-            <PanelHeader title="Watchlist" sub="Haz clic en un token para ver su análisis, gráfica y alertas." />
+            <PanelHeader title="Watchlist" sub={tr("Click a token to see its analysis, chart and alerts.", "Haz clic en un token para ver su análisis, gráfica y alertas.")} />
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-faint">
                     <th className="px-4 py-2.5 font-medium">Token</th>
-                    <th className="px-3 py-2.5 text-right font-medium">Precio</th>
+                    <th className="px-3 py-2.5 text-right font-medium">{tr("Price", "Precio")}</th>
                     <th className="px-3 py-2.5 text-right font-medium">1h</th>
                     <th className="px-3 py-2.5 text-right font-medium">24h</th>
-                    <th className="px-3 py-2.5 text-right font-medium" title="Distancia al máximo registrado por PeakAlert">Desde máx.</th>
+                    <th className="px-3 py-2.5 text-right font-medium" title={tr("Distance to the high recorded by PeakAlert", "Distancia al máximo registrado por PeakAlert")}>{tr("From high", "Desde máx.")}</th>
                     <th className="px-3 py-2.5 text-right font-medium">Market cap</th>
                     <th className="hidden px-3 py-2.5 text-right font-medium lg:table-cell">Vol. 24h</th>
-                    <th className="hidden px-3 py-2.5 text-right font-medium lg:table-cell">Liquidez</th>
-                    <th className="px-3 py-2.5 text-right font-medium" title="Riesgo de agotamiento del impulso (0–100)">Riesgo</th>
+                    <th className="hidden px-3 py-2.5 text-right font-medium lg:table-cell">{tr("Liquidity", "Liquidez")}</th>
+                    <th className="px-3 py-2.5 text-right font-medium" title={tr("Momentum exhaustion risk (0–100)", "Riesgo de agotamiento del impulso (0–100)")}>{tr("Risk", "Riesgo")}</th>
                     <th className="hidden px-3 py-2.5 font-medium xl:table-cell">24h</th>
                     <th className="w-10" />
                   </tr>
@@ -198,7 +212,7 @@ export default function DashboardPage() {
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
                               <span className="font-medium">{t.symbol}</span>
-                              {t.last_error && <Badge tone="warn">sin actualizar</Badge>}
+                              {t.last_error && <Badge tone="warn">{tr("not updating", "sin actualizar")}</Badge>}
                             </div>
                             <ChainTag chain={t.chain_id} />
                           </div>
@@ -249,8 +263,8 @@ export default function DashboardPage() {
                       </div>
                     </div>
                     <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-1.5 text-faint">Riesgo <RiskBadge score={t.risk_score} coverage={toNum(t.risk_coverage)} size="sm" /></span>
-                      <span className="text-faint">Desde máx. <Delta value={pctBetween(t.peak_price, t.price_usd)} /></span>
+                      <span className="flex items-center gap-1.5 text-faint">{tr("Risk", "Riesgo")} <RiskBadge score={t.risk_score} coverage={toNum(t.risk_coverage)} size="sm" /></span>
+                      <span className="text-faint">{tr("From high", "Desde máx.")} <Delta value={pctBetween(t.peak_price, t.price_usd)} /></span>
                       <Sparkline data={t.sparkline ?? []} width={64} height={20} />
                     </div>
                   </Link>
@@ -262,8 +276,12 @@ export default function DashboardPage() {
       )}
 
       <p className="mt-6 text-[11px] leading-relaxed text-faint">
-        {RISK_DISCLAIMER} Datos de mercado: DexScreener (par con mayor liquidez). &ldquo;Desde máx.&rdquo; usa el máximo que PeakAlert ha
-        registrado. <a href="https://dexscreener.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-muted">dexscreener.com <ExternalLink size={10} /></a>
+        {pl(RISK_DISCLAIMER)}{" "}
+        {tr(
+          "Market data: DexScreener (most liquid pair). “From high” uses the high recorded by PeakAlert.",
+          "Datos de mercado: DexScreener (par con mayor liquidez). “Desde máx.” usa el máximo que PeakAlert ha registrado.",
+        )}{" "}
+        <a href="https://dexscreener.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 hover:text-muted">dexscreener.com <ExternalLink size={10} /></a>
       </p>
 
       <AddTokenDialog
@@ -327,15 +345,16 @@ function MarketSummary({ tokens, market }: { tokens: TokenDTO[]; market?: { demo
   const avg = changes.length ? changes.reduce((s, c) => s + c, 0) / changes.length : null;
   const vol = tokens.reduce((s, t) => s + (toNum(t.volume_h24) ?? 0), 0);
   const mc = tokens.reduce((s, t) => s + (toNum(t.market_cap) ?? 0), 0);
+  const { t: tr } = useI18n();
   return (
     <Panel>
-      <PanelHeader title={<span className="flex items-center gap-1.5"><Flame size={14} className="text-warn" /> Resumen del mercado</span>} />
+      <PanelHeader title={<span className="flex items-center gap-1.5"><Flame size={14} className="text-warn" /> {tr("Market summary", "Resumen del mercado")}</span>} />
       <dl className="space-y-3 p-4 text-sm">
-        <Row k="SOL" v={market?.sol ? <span className="num">{formatPrice(market.sol.price_usd)} <Delta value={market.sol.change_h24} digits={1} className="text-xs" /></span> : market?.demo ? <span className="text-xs text-faint">sin conexión</span> : "—"} />
-        <Row k="Tu watchlist 24h (media)" v={<Delta value={avg} digits={1} />} />
-        <Row k="Subiendo / bajando" v={<span className="num"><span className="text-up">{up}</span> / <span className="text-down">{changes.length - up}</span></span>} />
-        <Row k="Market cap total" v={<span className="num">{formatUsdCompact(mc)}</span>} />
-        <Row k="Volumen 24h total" v={<span className="num">{formatUsdCompact(vol)}</span>} />
+        <Row k="SOL" v={market?.sol ? <span className="num">{formatPrice(market.sol.price_usd)} <Delta value={market.sol.change_h24} digits={1} className="text-xs" /></span> : market?.demo ? <span className="text-xs text-faint">{tr("offline", "sin conexión")}</span> : "—"} />
+        <Row k={tr("Your watchlist 24h (avg)", "Tu watchlist 24h (media)")} v={<Delta value={avg} digits={1} />} />
+        <Row k={tr("Up / down", "Subiendo / bajando")} v={<span className="num"><span className="text-up">{up}</span> / <span className="text-down">{changes.length - up}</span></span>} />
+        <Row k={tr("Total market cap", "Market cap total")} v={<span className="num">{formatUsdCompact(mc)}</span>} />
+        <Row k={tr("Total 24h volume", "Volumen 24h total")} v={<span className="num">{formatUsdCompact(vol)}</span>} />
       </dl>
       {changes.length > 0 && (
         <div className="px-4 pb-4">
@@ -360,6 +379,7 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 type Mode = "price" | "mcap";
 
 function ChartPanel({ tokens }: { tokens: TokenDTO[] }) {
+  const { t: tr } = useI18n();
   const [selected, setSelected] = useState<string>(tokens[0]?.id);
   const [mode, setMode] = useState<Mode>("price");
   const id = tokens.some((t) => t.id === selected) ? selected : tokens[0]?.id;
@@ -388,16 +408,18 @@ function ChartPanel({ tokens }: { tokens: TokenDTO[] }) {
             </button>
           ))}
         </div>
-        <Segmented<Mode> value={mode} onChange={setMode} options={[{ value: "price", label: "Precio" }, { value: "mcap", label: "Market cap" }]} />
+        <Segmented<Mode> value={mode} onChange={setMode} options={[{ value: "price", label: tr("Price", "Precio") }, { value: "mcap", label: "Market cap" }]} />
       </div>
       <div className="p-2">
         {points.length < 2 ? (
-          <EmptyState title="Recopilando historial">La gráfica se llena con los precios que PeakAlert registra (≈ 1 por minuto).</EmptyState>
+          <EmptyState title={tr("Collecting history", "Recopilando historial")}>
+            {tr("The chart fills with the prices PeakAlert records (≈ 1 per minute).", "La gráfica se llena con los precios que PeakAlert registra (≈ 1 por minuto).")}
+          </EmptyState>
         ) : (
           <PriceChart points={points} height={260} format={mode === "price" ? formatPrice : formatUsdCompact} />
         )}
       </div>
-      <p className="border-t border-line px-4 py-2 text-[11px] text-faint">Últimas 24 h · historial registrado por PeakAlert</p>
+      <p className="border-t border-line px-4 py-2 text-[11px] text-faint">{tr("Last 24h · history recorded by PeakAlert", "Últimas 24 h · historial registrado por PeakAlert")}</p>
     </Panel>
   );
 }

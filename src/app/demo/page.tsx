@@ -12,10 +12,12 @@ import { OpenIn } from "@/components/open-in";
 import { Badge, Button, Delta, ErrorNote, Input, Panel, PanelHeader, Skeleton, cn } from "@/components/ui";
 import { formatPrice, formatUsdCompact } from "@/lib/format";
 import type { PublicSnapshot, PublicToken } from "@/lib/market/public";
+import { useI18n } from "@/lib/i18n/client";
 
 const getJson = (u: string) => fetch(u).then((r) => r.json());
 
 export default function DemoPage() {
+  const { t: tr, p: pl } = useI18n();
   const { data } = useSWR<PublicSnapshot>("/api/demo", getJson, { refreshInterval: 30_000 });
   const [selected, setSelected] = useState(0);
   const [found, setFound] = useState<PublicToken[]>([]);
@@ -41,7 +43,7 @@ export default function DemoPage() {
       setSelected(0);
       setQuery("");
     } catch (err) {
-      setSearchError(err instanceof Error ? err.message : "Error");
+      setSearchError(err instanceof Error ? err.message : tr("Error", "Error"));
     } finally {
       setSearching(false);
     }
@@ -55,18 +57,25 @@ export default function DemoPage() {
           <div className="mb-6 flex items-start gap-3 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-warn">
             <FlaskConical size={18} className="mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold">DATOS DE DEMOSTRACIÓN</p>
-              <p className="mt-0.5 text-warn/80">No hay conexión con la API de mercado en este momento. Los tokens y valores de esta página son ficticios y solo ilustran la interfaz.</p>
+              <p className="font-semibold">{tr("DEMO DATA", "DATOS DE DEMOSTRACIÓN")}</p>
+              <p className="mt-0.5 text-warn/80">
+                {tr(
+                  "The market API is unreachable right now. The tokens and values on this page are fictitious and only illustrate the interface.",
+                  "No hay conexión con la API de mercado en este momento. Los tokens y valores de esta página son ficticios y solo ilustran la interfaz.",
+                )}
+              </p>
             </div>
           </div>
         ) : data ? (
           <div className="mb-6 flex items-start gap-3 rounded-lg border border-line bg-panel px-4 py-3 text-sm">
             <Radio size={18} className="mt-0.5 shrink-0 text-up" />
             <div className="text-muted">
-              <p className="font-medium text-text">Datos reales de DexScreener</p>
+              <p className="font-medium text-text">{tr("Live data from DexScreener", "Datos reales de DexScreener")}</p>
               <p className="mt-0.5">
-                Vista previa pública. Aquí la puntuación usa solo los datos actuales; con una cuenta, PeakAlert también registra el historial de
-                cada token (máximos, rechazos, liquidez) y la puntuación es más completa.
+                {tr(
+                  "Public preview. Here the score only uses current data; with an account, PeakAlert also records each token's history (highs, rejections, liquidity) and the score is more complete.",
+                  "Vista previa pública. Aquí la puntuación usa solo los datos actuales; con una cuenta, PeakAlert también registra el historial de cada token (máximos, rechazos, liquidez) y la puntuación es más completa.",
+                )}
               </p>
             </div>
             <DataAge at={data.fetchedAt} className="ml-auto shrink-0" />
@@ -77,15 +86,20 @@ export default function DemoPage() {
 
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Peak Detection en vivo</h1>
-            <p className="mt-1 text-sm text-muted">Riesgo de agotamiento del impulso (0–100) de memecoins populares de Solana.</p>
+            <h1 className="text-2xl font-semibold tracking-tight">{tr("Live Peak Detection", "Peak Detection en vivo")}</h1>
+            <p className="mt-1 text-sm text-muted">{tr("Momentum-exhaustion risk (0–100) for popular Solana memecoins.", "Riesgo de agotamiento del impulso (0–100) de memecoins populares de Solana.")}</p>
           </div>
-          <Link href="/signup" className="rounded-md bg-text px-4 py-2 text-sm font-medium text-bg hover:bg-white">Monitorear mis tokens gratis</Link>
+          <Link href="/signup" className="rounded-md bg-text px-4 py-2 text-sm font-medium text-bg hover:bg-white">{tr("Track my tokens free", "Monitorear mis tokens gratis")}</Link>
         </div>
 
         <form onSubmit={search} className="mb-5 rounded-xl border border-line bg-panel p-4">
-          <label htmlFor="demo-search" className="text-sm font-medium">Analiza cualquier token</label>
-          <p className="mt-0.5 text-xs text-muted">Pega la contract address (Solana, Ethereum, Base, BNB…) y mira su puntuación de riesgo al momento, sin registrarte.</p>
+          <label htmlFor="demo-search" className="text-sm font-medium">{tr("Analyze any token", "Analiza cualquier token")}</label>
+          <p className="mt-0.5 text-xs text-muted">
+            {tr(
+              "Paste a contract address (Solana, Ethereum, Base, BNB…) and see its risk score instantly — no sign-up.",
+              "Pega la contract address (Solana, Ethereum, Base, BNB…) y mira su puntuación de riesgo al momento, sin registrarte.",
+            )}
+          </p>
           <div className="mt-3 flex gap-2">
             <Input
               id="demo-search"
@@ -97,7 +111,7 @@ export default function DemoPage() {
               className="num text-[13px]"
             />
             <Button type="submit" variant="primary" loading={searching} disabled={!query.trim()}>
-              <Search size={14} /> Analizar
+              <Search size={14} /> {tr("Analyze", "Analizar")}
             </Button>
           </div>
           {searchError && <div className="mt-3"><ErrorNote>{searchError}</ErrorNote></div>}
@@ -105,7 +119,7 @@ export default function DemoPage() {
 
         <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
           <Panel className="overflow-hidden">
-            <PanelHeader title="Tokens" sub="Selecciona uno para ver el detalle del análisis" />
+            <PanelHeader title="Tokens" sub={tr("Select one to see the full analysis", "Selecciona uno para ver el detalle del análisis")} />
             {!data ? (
               <div className="space-y-2 p-4"><Skeleton className="h-12" /><Skeleton className="h-12" /><Skeleton className="h-12" /></div>
             ) : (
@@ -114,12 +128,12 @@ export default function DemoPage() {
                   <thead>
                     <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-faint">
                       <th className="px-4 py-2.5 font-medium">Token</th>
-                      <th className="px-3 py-2.5 text-right font-medium">Precio</th>
+                      <th className="px-3 py-2.5 text-right font-medium">{tr("Price", "Precio")}</th>
                       <th className="px-3 py-2.5 text-right font-medium">1h</th>
                       <th className="px-3 py-2.5 text-right font-medium">24h</th>
                       <th className="px-3 py-2.5 text-right font-medium">Market cap</th>
-                      <th className="px-3 py-2.5 text-right font-medium">Liquidez</th>
-                      <th className="px-3 py-2.5 text-right font-medium">Riesgo</th>
+                      <th className="px-3 py-2.5 text-right font-medium">{tr("Liquidity", "Liquidez")}</th>
+                      <th className="px-3 py-2.5 text-right font-medium">{tr("Risk", "Riesgo")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -131,7 +145,7 @@ export default function DemoPage() {
                             <div>
                               <div className="flex items-center gap-1.5">
                                 <p className="font-medium">{x.symbol}</p>
-                                {found.some((f) => f.address === x.address && f.chain_id === x.chain_id) && <Badge>tu búsqueda</Badge>}
+                                {found.some((f) => f.address === x.address && f.chain_id === x.chain_id) && <Badge>{tr("your search", "tu búsqueda")}</Badge>}
                               </div>
                               <div className="flex items-center gap-1.5">
                                 <ChainTag chain={x.chain_id} />
@@ -169,37 +183,46 @@ export default function DemoPage() {
                   <RiskGauge score={t.risk_score} coverage={t.risk_coverage} />
                   <OpenIn chainId={t.chain_id} address={t.address} pairUrl={t.pair_url} className="mt-4 justify-center" />
                   <div className="mt-5">
-                    {t.risk_factors.length ? <RiskFactors factors={t.risk_factors} /> : <p className="text-xs text-muted">Desglose no disponible en modo demostración.</p>}
+                    {t.risk_factors.length ? <RiskFactors factors={t.risk_factors} /> : <p className="text-xs text-muted">{tr("Breakdown not available in demo mode.", "Desglose no disponible en modo demostración.")}</p>}
                   </div>
                 </>
               ) : (
                 <Skeleton className="h-64" />
               )}
-              <p className="mt-4 text-[11px] leading-relaxed text-faint">{RISK_DISCLAIMER}</p>
+              <p className="mt-4 text-[11px] leading-relaxed text-faint">{pl(RISK_DISCLAIMER)}</p>
             </div>
           </Panel>
         </div>
 
         <div className="mt-12">
-          <h2 className="text-lg font-semibold tracking-tight">Así se explica cada alerta</h2>
+          <h2 className="text-lg font-semibold tracking-tight">{tr("How every alert explains itself", "Así se explica cada alerta")}</h2>
           <p className="mt-1 text-sm text-muted">
-            Ejemplo ilustrativo (no corresponde a un token real): cada aviso dice qué pasa, por qué se generó, qué indicadores cambiaron, qué
-            riesgo representa y qué vigilar.
+            {tr(
+              "Illustrative example (not a real token): every alert says what's happening, why it fired, which indicators changed, what risk it represents and what to watch.",
+              "Ejemplo ilustrativo (no corresponde a un token real): cada aviso dice qué pasa, por qué se generó, qué indicadores cambiaron, qué riesgo representa y qué vigilar.",
+            )}
           </p>
           <div className="mt-4 rounded-xl border border-line bg-panel p-4">
-            <p className="mb-3 text-sm font-medium">EJEMPLO: Riesgo de agotamiento 78/100</p>
+            <p className="mb-3 text-sm font-medium">{tr("EXAMPLE: Exhaustion risk 78/100", "EJEMPLO: Riesgo de agotamiento 78/100")}</p>
             <AlertExplanationCard
               e={{
-                what: "Varios indicadores muestran señales típicas de agotamiento del impulso alcista.",
-                why: "La puntuación de riesgo (78/100) superó tu umbral de 70.",
+                what: tr("Several indicators show typical signs of an exhausted rally.", "Varios indicadores muestran señales típicas de agotamiento del impulso alcista."),
+                why: tr("The risk score (78/100) went above your threshold of 70.", "La puntuación de riesgo (78/100) superó tu umbral de 70."),
                 indicators: [
-                  { label: "Presión de venta", value: "1.9 ventas por compra · 82/100", tone: "down" },
-                  { label: "Rechazos del máximo", value: "2 rechazos · 65/100", tone: "warn" },
-                  { label: "Caída del volumen", value: "38% del promedio · 70/100", tone: "warn" },
-                  { label: "Pérdida de momentum", value: "1h −6% · 6h +140%", tone: "down" },
+                  { label: tr("Sell pressure", "Presión de venta"), value: tr("1.9 sells per buy · 82/100", "1.9 ventas por compra · 82/100"), tone: "down" },
+                  { label: tr("Rejections at the high", "Rechazos del máximo"), value: tr("2 rejections · 65/100", "2 rechazos · 65/100"), tone: "warn" },
+                  { label: tr("Volume decline", "Caída del volumen"), value: tr("38% of average · 70/100", "38% del promedio · 70/100"), tone: "warn" },
+                  { label: tr("Momentum loss", "Pérdida de momentum"), value: "1h −6% · 6h +140%", tone: "down" },
                 ],
-                risk: "La puntuación resume señales observadas; no es la probabilidad de que el precio caiga. Es una señal basada en datos de mercado, no una predicción: el precio puede recuperarse.",
-                watch: ["Qué factores siguen subiendo en el detalle del token.", "Si la puntuación baja de nuevo (el impulso se recupera).", "Tu nivel de trailing stop si tienes una posición."],
+                risk: tr(
+                  "The score summarizes observed signals; it is not the probability that price will fall. This is a signal based on market data, not a prediction: the price may recover.",
+                  "La puntuación resume señales observadas; no es la probabilidad de que el precio caiga. Es una señal basada en datos de mercado, no una predicción: el precio puede recuperarse.",
+                ),
+                watch: [
+                  tr("Which factors keep rising in the token's detail view.", "Qué factores siguen subiendo en el detalle del token."),
+                  tr("Whether the score drops again (momentum recovering).", "Si la puntuación baja de nuevo (el impulso se recupera)."),
+                  tr("Your trailing stop level if you hold a position.", "Tu nivel de trailing stop si tienes una posición."),
+                ],
               }}
             />
           </div>

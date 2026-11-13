@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { isEvmChain, normalizeAddress } from "../validation";
+import { msg } from "../i18n";
 
 /**
  * DexScreener public API (no API key).
@@ -74,16 +75,16 @@ async function getJson(path: string, attempt = 0): Promise<unknown> {
         await new Promise((r) => setTimeout(r, 500 * 2 ** attempt + Math.random() * 250));
         return getJson(path, attempt + 1);
       }
-      throw new MarketApiError(`DexScreener respondió ${res.status}`, res.status, true);
+      throw new MarketApiError(msg(`DexScreener returned ${res.status}`, `DexScreener respondió ${res.status}`), res.status, true);
     }
-    if (!res.ok) throw new MarketApiError(`DexScreener respondió ${res.status}`, res.status, false);
+    if (!res.ok) throw new MarketApiError(msg(`DexScreener returned ${res.status}`, `DexScreener respondió ${res.status}`), res.status, false);
     return await res.json();
   } catch (err) {
     if (err instanceof MarketApiError) throw err;
     const aborted = err instanceof Error && err.name === "AbortError";
     if (attempt < 1) return getJson(path, attempt + 1);
     throw new MarketApiError(
-      aborted ? "DexScreener no respondió a tiempo" : "No se pudo conectar con DexScreener",
+      aborted ? msg("DexScreener timed out", "DexScreener no respondió a tiempo") : msg("Could not reach DexScreener", "No se pudo conectar con DexScreener"),
       null,
       true,
     );

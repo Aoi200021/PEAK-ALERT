@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, requireUser } from "@/lib/api";
 import { refreshTokens } from "@/lib/market/refresh";
 import { protectionSummary, simulateTrailingStops } from "@/lib/protection";
@@ -7,12 +8,12 @@ import { uuidSchema } from "@/lib/validation";
 /** Profit Protection analysis for one position (Pro+). */
 export const GET = handler(async (_req: Request, ctx: RouteContext<"/api/positions/[id]/protection">) => {
   const { user, plan, admin } = await requireUser();
-  if (!plan.portfolio) throw new HttpError(403, "PLAN_FEATURE", "Profit Protection está disponible en Pro y Premium.");
+  if (!plan.portfolio) throw new HttpError(403, "PLAN_FEATURE", L("Profit Protection is available on Pro and Premium.", "Profit Protection está disponible en Pro y Premium."));
   const { id } = await ctx.params;
-  if (!uuidSchema.safeParse(id).success) throw new HttpError(400, "INVALID_ID", "ID no válido.");
+  if (!uuidSchema.safeParse(id).success) throw new HttpError(400, "INVALID_ID", L("Invalid ID.", "ID no válido."));
 
   const { data: pos } = await admin.from("positions").select("*").eq("id", id).eq("user_id", user.id).maybeSingle();
-  if (!pos) throw new HttpError(404, "NOT_FOUND", "Posición no encontrada.");
+  if (!pos) throw new HttpError(404, "NOT_FOUND", L("Position not found.", "Posición no encontrada."));
 
   try {
     await refreshTokens(admin, [pos.token_id]);

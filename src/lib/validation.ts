@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { msg } from "./i18n";
 
 /** Chains PeakAlert supports. DexScreener chain ids. */
 export const SUPPORTED_CHAINS = [
@@ -62,10 +63,10 @@ export function isEvmChain(chainId: string) {
 export const addressSchema = z
   .string()
   .trim()
-  .min(1, "Ingresa una dirección")
-  .max(200, "Dirección demasiado larga")
+  .min(1, msg("Enter an address", "Ingresa una dirección"))
+  .max(200, msg("Address too long", "Dirección demasiado larga"))
   .refine((a) => detectAddressKind(a) !== null, {
-    message: "Formato de dirección no válido (EVM 0x…, Solana base58, Sui o TON)",
+    message: msg("Invalid address format (EVM 0x…, Solana base58, Sui or TON)", "Formato de dirección no válido (EVM 0x…, Solana base58, Sui o TON)"),
   });
 
 export const chainSchema = z.enum(SUPPORTED_CHAINS);
@@ -79,7 +80,7 @@ export const addTokenSchema = z.object({
 
 const positiveNumber = z.coerce.number().finite().positive().max(1e15);
 const isoDate = z.coerce.date().refine((d) => d.getTime() <= Date.now() + 5 * 60_000, {
-  message: "La fecha no puede estar en el futuro",
+  message: msg("The date can't be in the future", "La fecha no puede estar en el futuro"),
 });
 
 /**
@@ -97,7 +98,7 @@ export const createPositionSchema = z
     notes: z.string().trim().max(500).optional(),
   })
   .refine((v) => v.entryPrice != null || v.entryMarketCap != null, {
-    message: "Indica el precio de entrada o el market cap de entrada",
+    message: msg("Enter the entry price or the entry market cap", "Indica el precio de entrada o el market cap de entrada"),
   });
 
 /** exitPrice = null reopens the position. exitPrice without exitAt uses "now". */

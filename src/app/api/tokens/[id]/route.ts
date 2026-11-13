@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, requireUser } from "@/lib/api";
 import { refreshTokens } from "@/lib/market/refresh";
 import { uuidSchema } from "@/lib/validation";
@@ -13,7 +14,7 @@ const RANGES = {
 export const GET = handler(async (req: Request, ctx: RouteContext<"/api/tokens/[id]">) => {
   const { user, plan, admin } = await requireUser();
   const { id } = await ctx.params;
-  if (!uuidSchema.safeParse(id).success) throw new HttpError(400, "INVALID_ID", "ID no válido.");
+  if (!uuidSchema.safeParse(id).success) throw new HttpError(400, "INVALID_ID", L("Invalid ID.", "ID no válido."));
   const rangeKey = (new URL(req.url).searchParams.get("range") ?? "24h") as keyof typeof RANGES;
   const range = RANGES[rangeKey] ?? RANGES["24h"];
 
@@ -32,7 +33,7 @@ export const GET = handler(async (req: Request, ctx: RouteContext<"/api/tokens/[
   }
 
   const { data: token } = await admin.from("tokens").select("*").eq("id", id).maybeSingle();
-  if (!token) throw new HttpError(404, "NOT_FOUND", "Token no encontrado.");
+  if (!token) throw new HttpError(404, "NOT_FOUND", L("Token not found.", "Token no encontrado."));
 
   const [history, rules, positions] = await Promise.all([
     admin.rpc("token_history", {

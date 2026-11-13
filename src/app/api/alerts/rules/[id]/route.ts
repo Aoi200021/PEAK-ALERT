@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, readJson, requireUser, zodMessage } from "@/lib/api";
 import { PARAM_SCHEMAS, type AlertType } from "@/lib/alerts/types";
 import { uuidSchema } from "@/lib/validation";
@@ -11,9 +12,9 @@ const patchSchema = z.object({
 });
 
 async function loadRule(admin: Awaited<ReturnType<typeof requireUser>>["admin"], userId: string, id: string) {
-  if (!uuidSchema.safeParse(id).success) throw new HttpError(400, "INVALID_ID", "ID no válido.");
+  if (!uuidSchema.safeParse(id).success) throw new HttpError(400, "INVALID_ID", L("Invalid ID.", "ID no válido."));
   const { data } = await admin.from("alert_rules").select("*").eq("id", id).eq("user_id", userId).maybeSingle();
-  if (!data) throw new HttpError(404, "NOT_FOUND", "Alerta no encontrada.");
+  if (!data) throw new HttpError(404, "NOT_FOUND", L("Alert not found.", "Alerta no encontrada."));
   return data;
 }
 
@@ -35,7 +36,7 @@ export const PATCH = handler(async (req: Request, ctx: RouteContext<"/api/alerts
     patch.state = {};
   }
   if (body.data.cooldownMinutes !== undefined) {
-    if (!plan.customCooldown) throw new HttpError(403, "PLAN_FEATURE", "El cooldown personalizado es una función Premium.");
+    if (!plan.customCooldown) throw new HttpError(403, "PLAN_FEATURE", L("Custom cooldown is a Premium feature.", "El cooldown personalizado es una función Premium."));
     patch.cooldown_minutes = body.data.cooldownMinutes;
   }
   const { data, error } = await admin.from("alert_rules").update(patch).eq("id", id).eq("user_id", user.id).select("*").single();

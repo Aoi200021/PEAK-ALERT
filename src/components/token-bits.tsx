@@ -2,6 +2,7 @@
 
 import { CHAIN_LABEL } from "@/lib/validation";
 import { timeAgo } from "@/lib/format";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "./ui";
 import { useEffect, useState } from "react";
 
@@ -41,8 +42,9 @@ export function ChainTag({ chain }: { chain: string }) {
 }
 
 export function Sparkline({ data, width = 96, height = 28 }: { data: number[]; width?: number; height?: number }) {
+  const { t } = useI18n();
   if (data.length < 2) {
-    return <span className="text-[10px] text-faint">recopilando…</span>;
+    return <span className="text-[10px] text-faint">{t("collecting…", "recopilando…")}</span>;
   }
   const min = Math.min(...data);
   const max = Math.max(...data);
@@ -62,6 +64,7 @@ export function Sparkline({ data, width = 96, height = 28 }: { data: number[]; w
 /** "Datos actualizados hace Xs" — ticks every second so users always know data age. */
 export function DataAge({ at, className, staleAfterSec = 120 }: { at: string | null | undefined; className?: string; staleAfterSec?: number }) {
   const [now, setNow] = useState<number | null>(null);
+  const { t, locale } = useI18n();
   useEffect(() => {
     const tick = () => setNow(Date.now());
     tick();
@@ -74,7 +77,7 @@ export function DataAge({ at, className, staleAfterSec = 120 }: { at: string | n
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-xs", stale ? "text-warn" : "text-faint", className)} title={at ?? undefined}>
       <span className={cn("h-1.5 w-1.5 rounded-full", stale ? "bg-warn" : "bg-up pulse-dot")} />
-      {at ? `Actualizado ${timeAgo(at, now)}` : "Sin datos"}
+      {at ? `${t("Updated", "Actualizado")} ${timeAgo(at, now, locale)}` : t("No data", "Sin datos")}
     </span>
   );
 }

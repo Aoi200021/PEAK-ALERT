@@ -2,6 +2,7 @@
 
 import { forwardRef, useEffect, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { useI18n } from "@/lib/i18n/client";
 
 export function cn(...c: Array<string | false | null | undefined>) {
   return c.filter(Boolean).join(" ");
@@ -183,6 +184,7 @@ export function Modal({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const { t } = useI18n();
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -203,7 +205,7 @@ export function Modal({
         <div>
           <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
             <h3 className="text-sm font-medium">{title}</h3>
-            <button onClick={onClose} className="rounded p-1 text-muted hover:bg-panel-2 hover:text-text" aria-label="Cerrar">
+            <button onClick={onClose} className="rounded p-1 text-muted hover:bg-panel-2 hover:text-text" aria-label={t("Close", "Cerrar")}>
               <X size={16} />
             </button>
           </div>

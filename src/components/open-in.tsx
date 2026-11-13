@@ -1,4 +1,7 @@
+"use client";
+
 import { ExternalLink } from "lucide-react";
+import { useI18n } from "@/lib/i18n/client";
 import { cn } from "./ui";
 
 /**
@@ -19,10 +22,11 @@ export function openInLinks(chainId: string, address: string, pairUrl?: string |
 }
 
 export function OpenIn({ chainId, address, pairUrl, className, compact }: { chainId: string; address: string; pairUrl?: string | null; className?: string; compact?: boolean }) {
+  const { t } = useI18n();
   if (!address || address.startsWith("demo-")) return null;
   return (
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      {!compact && <span className="text-[11px] text-faint">Abrir en</span>}
+      {!compact && <span className="text-[11px] text-faint">{t("Open in", "Abrir en")}</span>}
       {openInLinks(chainId, address, pairUrl).map((l) => (
         <a
           key={l.label}

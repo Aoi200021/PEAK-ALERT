@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { L } from "@/lib/i18n";
 import { handler, HttpError, readJson, requireUser } from "@/lib/api";
 
 const subSchema = z.object({
@@ -10,7 +11,7 @@ const subSchema = z.object({
 export const POST = handler(async (req: Request) => {
   const { user, admin } = await requireUser();
   const body = subSchema.safeParse(await readJson(req));
-  if (!body.success) throw new HttpError(400, "INVALID_SUBSCRIPTION", "Suscripción push no válida.");
+  if (!body.success) throw new HttpError(400, "INVALID_SUBSCRIPTION", L("Invalid push subscription.", "Suscripción push no válida."));
   const { error } = await admin.from("push_subscriptions").upsert(
     {
       user_id: user.id,
@@ -28,7 +29,7 @@ export const POST = handler(async (req: Request) => {
 export const DELETE = handler(async (req: Request) => {
   const { user, admin } = await requireUser();
   const body = z.object({ endpoint: z.string().max(1000) }).safeParse(await readJson(req));
-  if (!body.success) throw new HttpError(400, "INVALID_INPUT", "Datos no válidos.");
+  if (!body.success) throw new HttpError(400, "INVALID_INPUT", L("Invalid data.", "Datos no válidos."));
   await admin.from("push_subscriptions").delete().eq("user_id", user.id).eq("endpoint", body.data.endpoint);
   return NextResponse.json({ ok: true });
 });

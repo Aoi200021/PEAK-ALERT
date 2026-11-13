@@ -31,6 +31,7 @@ export function PriceChart({
   format = formatPrice,
   color: fixedColor,
   lines = [],
+  entryLabel = "entry",
 }: {
   points: ChartPoint[];
   markers?: ChartMarker[];
@@ -42,6 +43,7 @@ export function PriceChart({
   color?: string;
   /** Extra horizontal reference lines. */
   lines?: { value: number; label: string; color?: string }[];
+  entryLabel?: string;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -103,7 +105,7 @@ export function PriceChart({
         lineStyle: LineStyle.Dotted,
         lineWidth: 1,
         axisLabelVisible: true,
-        title: "entrada",
+        title: entryLabel,
       });
     }
 

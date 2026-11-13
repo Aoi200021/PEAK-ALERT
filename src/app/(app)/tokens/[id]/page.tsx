@@ -18,6 +18,8 @@ import { api, ApiError, fetcher } from "@/lib/client/api";
 import type { MeResponse, PositionDTO, RuleDTO, TokenDTO } from "@/lib/client/types";
 import { formatDateTime, formatNumber, formatPrice, formatUsd, formatUsdCompact, shortAddress, timeAgo, toNum } from "@/lib/format";
 import { positionPnl } from "@/lib/portfolio";
+import { useI18n } from "@/lib/i18n/client";
+import { pickMsg } from "@/lib/i18n";
 
 type Range = "1h" | "6h" | "24h" | "7d";
 type Mode = "price" | "mcap" | "risk";
@@ -36,6 +38,7 @@ interface TokenResponse {
 
 export default function TokenPage() {
   const { id } = useParams<{ id: string }>();
+  const { t: tr, p: pl, locale } = useI18n();
   const [range, setRange] = useState<Range>("24h");
   const [mode, setMode] = useState<Mode>("price");
   const { data, error, mutate } = useSWR<TokenResponse>(`/api/tokens/${id}?range=${range}`, fetcher, {
@@ -58,8 +61,9 @@ export default function TokenPage() {
     [data?.history, mode],
   );
   const markers = useMemo(
-    () => (data?.events ?? []).map((e) => ({ t: e.created_at, label: ALERT_META[e.type as keyof typeof ALERT_META]?.short ?? "Alerta" })),
-    [data?.events],
+    () => (data?.events ?? []).map((e) => ({ t: e.created_at, label: pl(ALERT_META[e.type as keyof typeof ALERT_META]?.short) || tr("Alert", "Alerta") })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pl/tr change with locale
+    [data?.events, locale],
   );
 
   if (error && !data) {
@@ -89,12 +93,12 @@ export default function TokenPage() {
     }
   }
   async function deleteRule(r: RuleDTO) {
-    if (!confirm("¿Eliminar esta alerta?")) return;
+    if (!confirm(tr("Delete this alert?", "¿Eliminar esta alerta?"))) return;
     await api(`/api/alerts/rules/${r.id}`, { method: "DELETE" }).catch(() => null);
     mutate();
   }
   async function deletePosition(p: PositionDTO) {
-    if (!confirm("¿Eliminar este registro de posición?")) return;
+    if (!confirm(tr("Delete this position record?", "¿Eliminar este registro de posición?"))) return;
     await api(`/api/positions/${p.id}`, { method: "DELETE" }).catch(() => null);
     mutate();
   }
@@ -115,14 +119,14 @@ export default function TokenPage() {
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-semibold tracking-tight">{t.symbol}</h1>
               <ChainTag chain={t.chain_id} />
-              {!data.watched && <Badge>No lo sigues</Badge>}
+              {!data.watched && <Badge>{tr("Not following", "No lo sigues")}</Badge>}
             </div>
             <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
               <span>{t.name}</span>
               <button
                 className="num inline-flex items-center gap-1 text-faint hover:text-text"
                 onClick={() => navigator.clipboard.writeText(t.address)}
-                title="Copiar dirección"
+                title={tr("Copy address", "Copiar dirección")}
               >
                 {shortAddress(t.address)} <Copy size={11} />
               </button>
@@ -141,7 +145,8 @@ export default function TokenPage() {
 
       {t.last_error && (
         <InfoNote tone="warn">
-          Última actualización fallida ({timeAgo(t.last_error_at)}): {t.last_error}. Se muestran los últimos datos válidos.
+          {tr("Last update failed", "Última actualización fallida")} ({timeAgo(t.last_error_at, undefined, locale)}): {pickMsg(t.last_error ?? "", locale)}.{" "}
+          {tr("Showing the latest valid data.", "Se muestran los últimos datos válidos.")}
         </InfoNote>
       )}
 
@@ -149,12 +154,12 @@ export default function TokenPage() {
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-4 lg:grid-cols-8">
         <Kv k="Market cap" v={formatUsdCompact(toNum(t.market_cap))} />
         <Kv k="FDV" v={formatUsdCompact(toNum(t.fdv))} />
-        <Kv k="Liquidez" v={formatUsdCompact(toNum(t.liquidity_usd))} />
+        <Kv k={tr("Liquidity", "Liquidez")} v={formatUsdCompact(toNum(t.liquidity_usd))} />
         <Kv k="Vol. 1h" v={formatUsdCompact(toNum(t.volume_h1))} />
         <Kv k="Vol. 24h" v={formatUsdCompact(toNum(t.volume_h24))} />
         <Kv k="5m / 1h / 6h" v={<span className="flex gap-1.5"><Delta value={toNum(t.change_m5)} digits={1} /><Delta value={toNum(t.change_h1)} digits={1} /><Delta value={toNum(t.change_h6)} digits={1} /></span>} />
-        <Kv k="Tx 1h (compras/ventas)" v={txH1 ? <span><span className="text-up">{txH1.buys}</span> / <span className="text-down">{txH1.sells}</span></span> : "—"} />
-        <Kv k="Máx. registrado" v={<span>{formatPrice(toNum(t.peak_price))} <Delta value={peakDist} digits={1} className="text-[11px]" /></span>} />
+        <Kv k={tr("Tx 1h (buys/sells)", "Tx 1h (compras/ventas)")} v={txH1 ? <span><span className="text-up">{txH1.buys}</span> / <span className="text-down">{txH1.sells}</span></span> : "—"} />
+        <Kv k={tr("Recorded high", "Máx. registrado")} v={<span>{formatPrice(toNum(t.peak_price))} <Delta value={peakDist} digits={1} className="text-[11px]" /></span>} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
@@ -166,13 +171,13 @@ export default function TokenPage() {
                 value={mode}
                 onChange={setMode}
                 options={[
-                  { value: "price", label: "Precio" },
+                  { value: "price", label: tr("Price", "Precio") },
                   { value: "mcap", label: "Market cap" },
-                  ...(data.signalHistory ? [{ value: "risk" as const, label: "Riesgo" }] : []),
+                  ...(data.signalHistory ? [{ value: "risk" as const, label: tr("Risk", "Riesgo") }] : []),
                 ]}
               />
             }
-            sub="Historial registrado por PeakAlert (≈ 1 punto por minuto mientras se monitorea)"
+            sub={tr("History recorded by PeakAlert (≈ 1 point per minute while tracked)", "Historial registrado por PeakAlert (≈ 1 punto por minuto mientras se monitorea)")}
             actions={
               <Segmented<Range>
                 value={range}
@@ -188,11 +193,15 @@ export default function TokenPage() {
           />
           <div className="p-2">
             {chartPoints.length < 2 ? (
-              <EmptyState title="Recopilando datos">
-                PeakAlert empezó a registrar este token hace poco. La gráfica se irá llenando con cada actualización.
+              <EmptyState title={tr("Collecting data", "Recopilando datos")}>
+                {tr(
+                  "PeakAlert started recording this token recently. The chart will fill in with every update.",
+                  "PeakAlert empezó a registrar este token hace poco. La gráfica se irá llenando con cada actualización.",
+                )}
               </EmptyState>
             ) : mode === "risk" ? (
               <PriceChart
+                entryLabel={tr("entry", "entrada")}
                 key="risk"
                 points={chartPoints}
                 color="#f0883e"
@@ -202,6 +211,7 @@ export default function TokenPage() {
             ) : (
               <PriceChart
                 key={mode}
+                entryLabel={tr("entry", "entrada")}
                 points={chartPoints}
                 markers={markers}
                 entryPrice={mode === "price" ? toNum(openPosition?.entry_price) : null}
@@ -211,7 +221,8 @@ export default function TokenPage() {
           </div>
           {txH24 && (
             <p className="border-t border-line px-4 py-2 text-[11px] text-faint">
-              24h: {formatNumber(txH24.buys)} compras · {formatNumber(txH24.sells)} ventas · Par {t.dex_id} · creado {t.pair_created_at ? formatDateTime(t.pair_created_at) : "—"}
+              24h: {formatNumber(txH24.buys)} {tr("buys", "compras")} · {formatNumber(txH24.sells)} {tr("sells", "ventas")} · {tr("Pair", "Par")} {t.dex_id} ·{" "}
+              {tr("created", "creado")} {t.pair_created_at ? formatDateTime(t.pair_created_at, locale) : "—"}
             </p>
           )}
         </Panel>
@@ -221,41 +232,43 @@ export default function TokenPage() {
           <Panel>
             <PanelHeader
               title="Peak Detection"
-              sub="Riesgo de agotamiento del impulso"
+              sub={tr("Momentum exhaustion risk", "Riesgo de agotamiento del impulso")}
               actions={
                 data.watched &&
                 me?.plan.alertTypes.includes("exhaustion_risk") && (
                   <Button size="sm" onClick={() => setRuleModal({ open: true, type: "exhaustion_risk" })}>
-                    Alertarme
+                    {tr("Alert me", "Alertarme")}
                   </Button>
                 )
               }
             />
             <div className="p-4">
               <RiskGauge score={t.risk_score ?? null} coverage={toNum(t.risk_coverage)} />
-              {t.risk_updated_at && <p className="mt-2 text-center text-[11px] text-faint">Calculado {timeAgo(t.risk_updated_at)}</p>}
+              {t.risk_updated_at && <p className="mt-2 text-center text-[11px] text-faint">{tr("Calculated", "Calculado")} {timeAgo(t.risk_updated_at, undefined, locale)}</p>}
               <div className="mt-5">
                 <RiskFactors factors={t.risk_factors} locked={!data.riskBreakdown} />
               </div>
-              <p className="mt-4 text-[11px] leading-relaxed text-faint">{RISK_DISCLAIMER}</p>
+              <p className="mt-4 text-[11px] leading-relaxed text-faint">{pl(RISK_DISCLAIMER)}</p>
             </div>
           </Panel>
 
           {/* Alerts */}
           <Panel>
             <PanelHeader
-              title="Alertas"
+              title={tr("Alerts", "Alertas")}
               actions={
                 data.watched && (
                   <Button size="sm" onClick={() => setRuleModal({ open: true })}>
-                    <Plus size={13} /> Nueva
+                    <Plus size={13} /> {tr("New", "Nueva")}
                   </Button>
                 )
               }
             />
             {data.rules.length === 0 ? (
               <p className="px-4 py-6 text-center text-xs text-muted">
-                {data.watched ? "Sin alertas para este token." : "Agrega el token a tu lista para crear alertas."}
+                {data.watched
+                  ? tr("No alerts for this token.", "Sin alertas para este token.")
+                  : tr("Add the token to your watchlist to create alerts.", "Agrega el token a tu lista para crear alertas.")}
               </p>
             ) : (
               <ul className="divide-y divide-line">
@@ -263,16 +276,26 @@ export default function TokenPage() {
                   <li key={r.id} className="flex items-start gap-2 px-4 py-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[13px]">{ALERT_META[r.type].label}</span>
-                        {!r.enabled ? <Badge>pausada</Badge> : r.armed ? <Badge tone="up">vigilando</Badge> : <Badge tone="warn">disparada</Badge>}
+                        <span className="text-[13px]">{pl(ALERT_META[r.type].label)}</span>
+                        {!r.enabled ? (
+                          <Badge>{tr("paused", "pausada")}</Badge>
+                        ) : r.armed ? (
+                          <Badge tone="up">{tr("watching", "vigilando")}</Badge>
+                        ) : (
+                          <Badge tone="warn">{tr("triggered", "disparada")}</Badge>
+                        )}
                       </div>
-                      <p className="mt-0.5 text-[11px] text-faint">{describeRule(r)}</p>
-                      {r.last_triggered_at && <p className="text-[11px] text-faint">Último aviso {timeAgo(r.last_triggered_at)}</p>}
+                      <p className="mt-0.5 text-[11px] text-faint">{describeRule(r, locale)}</p>
+                      {r.last_triggered_at && (
+                        <p className="text-[11px] text-faint">
+                          {tr("Last alert", "Último aviso")} {timeAgo(r.last_triggered_at, undefined, locale)}
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 gap-0.5">
-                      <IconBtn label={r.enabled ? "Pausar" : "Activar"} onClick={() => toggleRule(r)}>{r.enabled ? <Pause size={13} /> : <Play size={13} />}</IconBtn>
-                      <IconBtn label="Editar" onClick={() => setRuleModal({ open: true, rule: r })}><Pencil size={13} /></IconBtn>
-                      <IconBtn label="Eliminar" onClick={() => deleteRule(r)} danger><Trash2 size={13} /></IconBtn>
+                      <IconBtn label={r.enabled ? tr("Pause", "Pausar") : tr("Enable", "Activar")} onClick={() => toggleRule(r)}>{r.enabled ? <Pause size={13} /> : <Play size={13} />}</IconBtn>
+                      <IconBtn label={tr("Edit", "Editar")} onClick={() => setRuleModal({ open: true, rule: r })}><Pencil size={13} /></IconBtn>
+                      <IconBtn label={tr("Delete", "Eliminar")} onClick={() => deleteRule(r)} danger><Trash2 size={13} /></IconBtn>
                     </div>
                   </li>
                 ))}
@@ -287,17 +310,20 @@ export default function TokenPage() {
               actions={
                 me?.plan.portfolio && (
                   <Button size="sm" onClick={() => setPosModal(true)}>
-                    <Plus size={13} /> Registrar
+                    <Plus size={13} /> {tr("Add", "Registrar")}
                   </Button>
                 )
               }
             />
             {!me?.plan.portfolio ? (
               <p className="px-4 py-6 text-center text-xs text-muted">
-                Profit Protection está disponible en Pro y Premium. <Link href="/pricing" className="text-text underline underline-offset-2">Ver planes</Link>
+                {tr("Profit Protection is available on Pro and Premium.", "Profit Protection está disponible en Pro y Premium.")}{" "}
+                <Link href="/pricing" className="text-text underline underline-offset-2">{tr("See plans", "Ver planes")}</Link>
               </p>
             ) : data.positions.length === 0 ? (
-              <p className="px-4 py-6 text-center text-xs text-muted">Registra tu precio de entrada para ver tu P&amp;L estimado.</p>
+              <p className="px-4 py-6 text-center text-xs text-muted">
+                {tr("Add your entry price to see your estimated P&L.", "Registra tu precio de entrada para ver tu P&L estimado.")}
+              </p>
             ) : (
               <ul className="divide-y divide-line">
                 {data.positions.map((p) => {
@@ -308,7 +334,7 @@ export default function TokenPage() {
                         <span className="text-muted">
                           {formatUsd(toNum(p.invested_usd))} @ <span className="num text-text">{formatPrice(toNum(p.entry_price))}</span>
                         </span>
-                        {pnl.closed ? <Badge>vendida</Badge> : <Badge tone="up">abierta</Badge>}
+                        {pnl.closed ? <Badge>{tr("sold", "vendida")}</Badge> : <Badge tone="up">{tr("open", "abierta")}</Badge>}
                       </div>
                       <div className="mt-1.5 flex items-center justify-between">
                         <span className="num text-sm">{formatUsd(pnl.value)}</span>
@@ -317,11 +343,15 @@ export default function TokenPage() {
                           <Delta value={pnl.pnlPct} />
                         </span>
                       </div>
-                      {pnl.closed && <p className="mt-1 text-faint">Vendida a {formatPrice(toNum(p.exit_price))} · {formatDateTime(p.exit_at)}</p>}
+                      {pnl.closed && (
+                        <p className="mt-1 text-faint">
+                          {tr("Sold at", "Vendida a")} {formatPrice(toNum(p.exit_price))} · {formatDateTime(p.exit_at, locale)}
+                        </p>
+                      )}
                       <div className="mt-2 flex gap-1.5">
-                        <Link href={`/portfolio/${p.id}`}><Button size="sm">Protección</Button></Link>
-                        {!pnl.closed && <Button size="sm" onClick={() => setClosing(p)}>Registrar venta</Button>}
-                        <Button size="sm" variant="ghost" onClick={() => deletePosition(p)}>Eliminar</Button>
+                        <Link href={`/portfolio/${p.id}`}><Button size="sm">{tr("Protection", "Protección")}</Button></Link>
+                        {!pnl.closed && <Button size="sm" onClick={() => setClosing(p)}>{tr("Record sale", "Registrar venta")}</Button>}
+                        <Button size="sm" variant="ghost" onClick={() => deletePosition(p)}>{tr("Delete", "Eliminar")}</Button>
                       </div>
                     </li>
                   );
@@ -332,7 +362,7 @@ export default function TokenPage() {
         </div>
       </div>
 
-      <Modal open={ruleModal.open} onClose={() => setRuleModal({ open: false })} title={ruleModal.rule ? "Editar alerta" : `Nueva alerta · ${t.symbol}`}>
+      <Modal open={ruleModal.open} onClose={() => setRuleModal({ open: false })} title={ruleModal.rule ? tr("Edit alert", "Editar alerta") : `${tr("New alert", "Nueva alerta")} · ${t.symbol}`}>
         <AlertRuleForm
           key={ruleModal.rule?.id ?? `new-${ruleModal.type ?? ""}`}
           tokenId={t.id}
@@ -348,7 +378,7 @@ export default function TokenPage() {
           }}
         />
       </Modal>
-      <Modal open={posModal} onClose={() => setPosModal(false)} title={`Registrar posición · ${t.symbol}`}>
+      <Modal open={posModal} onClose={() => setPosModal(false)} title={`${tr("Add position", "Registrar posición")} · ${t.symbol}`}>
         <NewPositionForm
           tokenId={t.id}
           currentPrice={price}
@@ -359,7 +389,7 @@ export default function TokenPage() {
           }}
         />
       </Modal>
-      <Modal open={!!closing} onClose={() => setClosing(null)} title="Registrar venta">
+      <Modal open={!!closing} onClose={() => setClosing(null)} title={tr("Record sale", "Registrar venta")}>
         {closing && (
           <ClosePositionForm
             position={closing}
