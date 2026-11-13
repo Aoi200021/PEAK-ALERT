@@ -140,9 +140,13 @@ export interface TokenCandidate {
  * Search an address across every chain. Returns one candidate per chain (best pair),
  * sorted by liquidity. The same EVM address can exist on several chains.
  */
+/** All pairs for an address across chains (raw). */
+export async function searchPairs(address: string): Promise<DexPair[]> {
+  return parsePairs(await getJson(`/latest/dex/tokens/${encodeURIComponent(address.trim())}`));
+}
+
 export async function lookupToken(address: string): Promise<TokenCandidate[]> {
-  const raw = await getJson(`/latest/dex/tokens/${encodeURIComponent(address.trim())}`);
-  const pairs = parsePairs(raw);
+  const pairs = await searchPairs(address);
   const chains = new Set(pairs.map((p) => p.chainId));
   const out: TokenCandidate[] = [];
   for (const chainId of chains) {

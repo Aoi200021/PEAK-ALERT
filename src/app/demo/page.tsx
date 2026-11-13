@@ -3,21 +3,49 @@
 import Link from "next/link";
 import { useState } from "react";
 import useSWR from "swr";
-import { ExternalLink, FlaskConical, Radio } from "lucide-react";
+import { FlaskConical, Radio, Search } from "lucide-react";
 import { AlertExplanationCard } from "@/components/alert-explanation";
 import { PublicFooter, PublicHeader } from "@/components/public-header";
 import { RiskBadge, RiskFactors, RiskGauge, RISK_DISCLAIMER } from "@/components/risk";
-import { DataAge, TokenAvatar } from "@/components/token-bits";
-import { Delta, Panel, PanelHeader, Skeleton, cn } from "@/components/ui";
+import { ChainTag, DataAge, TokenAvatar } from "@/components/token-bits";
+import { OpenIn } from "@/components/open-in";
+import { Badge, Button, Delta, ErrorNote, Input, Panel, PanelHeader, Skeleton, cn } from "@/components/ui";
 import { formatPrice, formatUsdCompact } from "@/lib/format";
-import type { PublicSnapshot } from "@/lib/market/public";
+import type { PublicSnapshot, PublicToken } from "@/lib/market/public";
 
 const getJson = (u: string) => fetch(u).then((r) => r.json());
 
 export default function DemoPage() {
   const { data } = useSWR<PublicSnapshot>("/api/demo", getJson, { refreshInterval: 30_000 });
   const [selected, setSelected] = useState(0);
-  const t = data?.tokens[Math.min(selected, (data?.tokens.length ?? 1) - 1)];
+  const [found, setFound] = useState<PublicToken[]>([]);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const list = [...found, ...(data?.tokens ?? []).filter((x) => !found.some((f) => f.address === x.address && f.chain_id === x.chain_id))];
+  const t = list[Math.min(selected, Math.max(list.length - 1, 0))];
+
+  async function search(e: React.FormEvent) {
+    e.preventDefault();
+    const a = query.trim();
+    if (!a) return;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const res = await fetch(`/api/demo/lookup?address=${encodeURIComponent(a)}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error?.message ?? "No se pudo analizar el token.");
+      const results = body.tokens as PublicToken[];
+      // Most liquid chain first; keep previous searches below.
+      setFound((prev) => [...results, ...prev.filter((p) => !results.some((r) => r.address === p.address && r.chain_id === p.chain_id))].slice(0, 6));
+      setSelected(0);
+      setQuery("");
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Error");
+    } finally {
+      setSearching(false);
+    }
+  }
 
   return (
     <div className="min-h-dvh">
@@ -55,6 +83,26 @@ export default function DemoPage() {
           <Link href="/signup" className="rounded-md bg-text px-4 py-2 text-sm font-medium text-bg hover:bg-white">Monitorear mis tokens gratis</Link>
         </div>
 
+        <form onSubmit={search} className="mb-5 rounded-xl border border-line bg-panel p-4">
+          <label htmlFor="demo-search" className="text-sm font-medium">Analiza cualquier token</label>
+          <p className="mt-0.5 text-xs text-muted">Pega la contract address (Solana, Ethereum, Base, BNB…) y mira su puntuación de riesgo al momento, sin registrarte.</p>
+          <div className="mt-3 flex gap-2">
+            <Input
+              id="demo-search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Contract address"
+              spellCheck={false}
+              autoComplete="off"
+              className="num text-[13px]"
+            />
+            <Button type="submit" variant="primary" loading={searching} disabled={!query.trim()}>
+              <Search size={14} /> Analizar
+            </Button>
+          </div>
+          {searchError && <div className="mt-3"><ErrorNote>{searchError}</ErrorNote></div>}
+        </form>
+
         <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
           <Panel className="overflow-hidden">
             <PanelHeader title="Tokens" sub="Selecciona uno para ver el detalle del análisis" />
@@ -75,14 +123,20 @@ export default function DemoPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.tokens.map((x, i) => (
-                      <tr key={x.address} onClick={() => setSelected(i)} className={cn("cursor-pointer border-b border-line last:border-0 hover:bg-panel-2/60", i === selected && "bg-panel-2/70")}>
+                    {list.map((x, i) => (
+                      <tr key={`${x.chain_id}:${x.address}`} onClick={() => setSelected(i)} className={cn("cursor-pointer border-b border-line last:border-0 hover:bg-panel-2/60", i === selected && "bg-panel-2/70")}>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2.5">
                             <TokenAvatar src={x.image_url} symbol={x.symbol} />
                             <div>
-                              <p className="font-medium">{x.symbol}</p>
-                              <p className="text-[11px] text-faint">{x.name}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium">{x.symbol}</p>
+                                {found.some((f) => f.address === x.address && f.chain_id === x.chain_id) && <Badge>tu búsqueda</Badge>}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <ChainTag chain={x.chain_id} />
+                                <p className="max-w-[120px] truncate text-[11px] text-faint">{x.name}</p>
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -108,12 +162,12 @@ export default function DemoPage() {
           <Panel>
             <PanelHeader
               title={t ? `${t.symbol} · Peak Detection` : "Peak Detection"}
-              actions={t?.pair_url && <a href={t.pair_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-muted hover:text-text">DexScreener <ExternalLink size={11} /></a>}
             />
             <div className="p-4">
               {t ? (
                 <>
                   <RiskGauge score={t.risk_score} coverage={t.risk_coverage} />
+                  <OpenIn chainId={t.chain_id} address={t.address} pairUrl={t.pair_url} className="mt-4 justify-center" />
                   <div className="mt-5">
                     {t.risk_factors.length ? <RiskFactors factors={t.risk_factors} /> : <p className="text-xs text-muted">Desglose no disponible en modo demostración.</p>}
                   </div>

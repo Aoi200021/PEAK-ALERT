@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Bell, ChartNoAxesColumn, LayoutGrid, LogOut, Settings, ShieldCheck, Siren, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { LogoMark } from "./brand";
+import { InstallPrompt } from "./install-prompt";
 import { cn } from "./ui";
 import { fetcher } from "@/lib/client/api";
 import type { MeResponse } from "@/lib/client/types";
@@ -96,7 +97,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Link>
         </header>
 
-        <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10 md:pt-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 pb-24 pt-5 md:px-8 md:pb-10 md:pt-8">
+          <InstallPrompt />
+          {children}
+        </main>
 
         {/* Bottom nav (mobile) */}
         <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

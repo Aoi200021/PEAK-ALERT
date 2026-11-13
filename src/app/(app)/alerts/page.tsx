@@ -10,6 +10,7 @@ import { PageHeader } from "@/components/app-shell";
 import { AlertRuleForm, describeRule } from "@/components/alert-rule-form";
 import { PaperExitDetails } from "@/components/paper-exit";
 import { AlertExplanationCard, SeverityBadge } from "@/components/alert-explanation";
+import { OpenIn } from "@/components/open-in";
 import { TokenAvatar } from "@/components/token-bits";
 import { Badge, Button, EmptyState, Field, InfoNote, Modal, Panel, Segmented, Select, Skeleton, cn } from "@/components/ui";
 import { ALERT_META } from "@/lib/alerts/types";
@@ -246,9 +247,12 @@ function HistoryTab() {
                     {e.explanation ? <AlertExplanationCard e={e.explanation} /> : <p className="text-xs text-muted">{e.message}</p>}
                     {e.paper && <PaperExitDetails paper={e.paper} />}
                     {e.token && (
-                      <Link href={`/tokens/${e.token.id}`} className="mt-2 inline-block text-xs text-muted hover:text-text">
-                        Ver {e.token.symbol} →
-                      </Link>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Link href={`/tokens/${e.token.id}`} className="text-xs text-muted hover:text-text">
+                          Ver {e.token.symbol} en PeakAlert →
+                        </Link>
+                        <OpenIn chainId={e.token.chain_id} address={e.token.address} />
+                      </div>
                     )}
                   </div>
                 )}

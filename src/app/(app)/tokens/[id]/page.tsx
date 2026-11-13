@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
-import { ArrowLeft, Copy, ExternalLink, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { AlertRuleForm, describeRule } from "@/components/alert-rule-form";
 import { ClosePositionForm, NewPositionForm } from "@/components/position-forms";
 import { PriceChart } from "@/components/price-chart";
+import { OpenIn } from "@/components/open-in";
 import { RiskFactors, RiskGauge, RISK_DISCLAIMER } from "@/components/risk";
 import type { AlertType } from "@/lib/alerts/types";
 import { ChainTag, DataAge, TokenAvatar } from "@/components/token-bits";
@@ -125,12 +126,8 @@ export default function TokenPage() {
               >
                 {shortAddress(t.address)} <Copy size={11} />
               </button>
-              {t.pair_url && (
-                <a href={t.pair_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 text-faint hover:text-text">
-                  DexScreener <ExternalLink size={11} />
-                </a>
-              )}
             </div>
+            <OpenIn chainId={t.chain_id} address={t.address} pairUrl={t.pair_url} className="mt-2" />
           </div>
         </div>
         <div className="text-right">

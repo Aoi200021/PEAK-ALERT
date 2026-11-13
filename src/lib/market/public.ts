@@ -1,6 +1,7 @@
 import "server-only";
 import { computeMomentum, computeRisk } from "../risk/score";
-import { fetchPairsForChain, pairToTokenRow, type DexPair } from "./dexscreener";
+import { SUPPORTED_CHAINS, normalizeAddress } from "../validation";
+import { fetchPairsForChain, pairToTokenRow, pickBestPair, searchPairs, type DexPair } from "./dexscreener";
 
 /** Well-known Solana memecoins used for the public preview (addresses verified on DexScreener). */
 export const DEMO_TOKENS = [
@@ -15,6 +16,7 @@ let cache: { at: number; data: PublicSnapshot } | null = null;
 
 export interface PublicToken {
   address: string;
+  chain_id: string;
   symbol: string | null;
   name: string | null;
   image_url: string | null;
@@ -40,7 +42,7 @@ export interface PublicSnapshot {
   tokens: PublicToken[];
 }
 
-function toPublic(address: string, p: DexPair): PublicToken {
+function toPublic(address: string, p: DexPair, chainId = "solana"): PublicToken {
   const row = pairToTokenRow(p);
   const market = {
     priceUsd: row.price_usd,
@@ -55,6 +57,7 @@ function toPublic(address: string, p: DexPair): PublicToken {
   const risk = computeRisk(market, []);
   return {
     address,
+    chain_id: chainId,
     symbol: row.symbol,
     name: row.name,
     image_url: row.image_url,
@@ -98,6 +101,7 @@ export async function getPublicSnapshot(): Promise<PublicSnapshot> {
 export function demoSnapshot(): PublicSnapshot {
   const mk = (symbol: string, price: number, mc: number, h1: number, h24: number, risk: number, momentum: number): PublicToken => ({
     address: `demo-${symbol}`,
+    chain_id: "solana",
     symbol,
     name: `${symbol} (demo)`,
     image_url: null,
@@ -120,4 +124,24 @@ export function demoSnapshot(): PublicSnapshot {
     sol: null,
     tokens: [mk("DEMOA", 0.00042, 4_200_000, 6.5, 85, 22, 81), mk("DEMOB", 0.0183, 18_300_000, -7.2, 140, 74, 28), mk("DEMOC", 0.0009, 900_000, -1.1, -12, 47, 39)],
   };
+}
+
+const lookupCache = new Map<string, { at: number; data: PublicToken[] }>();
+
+/** Analyze any address for the public demo: one result per supported chain, most liquid first. */
+export async function analyzePublicAddress(address: string): Promise<PublicToken[]> {
+  const key = address.trim();
+  const hit = lookupCache.get(key);
+  if (hit && Date.now() - hit.at < TTL) return hit.data;
+  const pairs = await searchPairs(key);
+  const chains = [...new Set(pairs.map((p) => p.chainId))].filter((c) => (SUPPORTED_CHAINS as readonly string[]).includes(c));
+  const out: PublicToken[] = [];
+  for (const chainId of chains) {
+    const best = pickBestPair(pairs, chainId, key);
+    if (best) out.push(toPublic(normalizeAddress(chainId, best.baseToken.address), best, chainId));
+  }
+  out.sort((a, b) => (b.liquidity_usd ?? 0) - (a.liquidity_usd ?? 0));
+  if (lookupCache.size > 500) lookupCache.clear();
+  lookupCache.set(key, { at: Date.now(), data: out });
+  return out;
 }

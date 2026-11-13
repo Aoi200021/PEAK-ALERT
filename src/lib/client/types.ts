@@ -114,7 +114,7 @@ export interface EventDTO {
   notified_at: string | null;
   notify_error: string | null;
   rule_id: string | null;
-  token: Pick<TokenDTO, "id" | "symbol" | "name" | "chain_id" | "image_url" | "price_usd" | "risk_score" | "risk_level"> | null;
+  token: Pick<TokenDTO, "id" | "symbol" | "name" | "chain_id" | "address" | "image_url" | "price_usd" | "risk_score" | "risk_level"> | null;
   paper: PaperDTO | null;
 }
 
