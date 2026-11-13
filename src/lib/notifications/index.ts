@@ -7,6 +7,8 @@ export interface NotificationPayload {
   body: string;
   url: string;
   tag?: string;
+  /** "high" for Premium priority alerts and critical signals. */
+  urgency?: "normal" | "high";
 }
 
 /**

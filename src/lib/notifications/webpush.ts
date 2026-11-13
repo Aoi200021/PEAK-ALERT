@@ -19,14 +19,14 @@ export function webPushConfigured(): boolean {
 
 export async function sendWebPush(
   sub: { endpoint: string; p256dh: string; auth: string },
-  payload: { title: string; body: string; url: string; tag?: string },
+  payload: { title: string; body: string; url: string; tag?: string; urgency?: "normal" | "high" },
 ): Promise<{ ok: boolean; gone?: boolean; error?: string }> {
   if (!webPushConfigured()) return { ok: false, error: "web push not configured" };
   try {
     await sendNotification(
       { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-      JSON.stringify(payload),
-      { TTL: 60 * 60, urgency: "high" },
+      JSON.stringify({ title: payload.title, body: payload.body, url: payload.url, tag: payload.tag }),
+      { TTL: 60 * 60, urgency: payload.urgency ?? "normal" },
     );
     return { ok: true };
   } catch (err) {

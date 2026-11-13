@@ -11,7 +11,7 @@ const RANGES = {
 } as const;
 
 export const GET = handler(async (req: Request, ctx: RouteContext<"/api/tokens/[id]">) => {
-  const { user, admin } = await requireUser();
+  const { user, plan, admin } = await requireUser();
   const { id } = await ctx.params;
   if (!uuidSchema.safeParse(id).success) throw new HttpError(400, "INVALID_ID", "ID no válido.");
   const rangeKey = (new URL(req.url).searchParams.get("range") ?? "24h") as keyof typeof RANGES;
@@ -46,16 +46,24 @@ export const GET = handler(async (req: Request, ctx: RouteContext<"/api/tokens/[
 
   const { data: events } = await admin
     .from("alert_events")
-    .select("id, title, created_at, price_usd, type")
+    .select("id, title, created_at, price_usd, type, severity")
     .eq("user_id", user.id)
     .eq("token_id", id)
     .gte("created_at", new Date(Date.now() - range.ms).toISOString())
     .order("created_at");
 
+  // Plan gating happens on the server, not only in the UI.
+  if (!plan.riskBreakdown) token.risk_factors = null;
+  const historyRows = ((history.data ?? []) as Record<string, unknown>[]).map((h) =>
+    plan.signalHistory ? h : { ...h, risk_score: null },
+  );
+
   return NextResponse.json({
     token,
+    riskBreakdown: plan.riskBreakdown,
+    signalHistory: plan.signalHistory,
     watched: Boolean(watched),
-    history: history.data ?? [],
+    history: historyRows,
     rules: rules.data ?? [],
     positions: positions.data ?? [],
     events: events ?? [],

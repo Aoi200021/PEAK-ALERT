@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { BellRing, Check } from "lucide-react";
+import { BellRing } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { DISCLAIMER } from "@/components/brand";
-import { Badge, Button, ErrorNote, InfoNote, Panel, PanelHeader, Skeleton, cn } from "@/components/ui";
+import { Badge, Button, ErrorNote, InfoNote, Panel, PanelHeader, Skeleton } from "@/components/ui";
 import { api, ApiError, fetcher } from "@/lib/client/api";
 import { currentSubscription, disablePush, enablePush, pushSupport, type PushSupport } from "@/lib/client/push";
 import type { MeResponse } from "@/lib/client/types";
-import { PLANS, type PlanId } from "@/lib/plans";
+import Link from "next/link";
+import { formatDateTime } from "@/lib/format";
 
 export default function SettingsPage() {
   const { data: me, mutate } = useSWR<MeResponse>("/api/me", fetcher);
@@ -36,39 +37,8 @@ export default function SettingsPage() {
         </Panel>
       </div>
 
-      <h2 className="mb-3 mt-8 text-sm font-medium">Planes</h2>
-      <div className="grid gap-4 md:grid-cols-3">
-        {(Object.keys(PLANS) as PlanId[]).map((id) => {
-          const p = PLANS[id];
-          const current = me?.plan.id === id;
-          return (
-            <Panel key={id} className={cn("flex flex-col p-5", current && "border-text/30")}>
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium">{p.name}</h3>
-                {current && <Badge tone="up">Tu plan</Badge>}
-              </div>
-              <p className="mt-1 text-xs text-faint">{id === "free" ? "Gratis" : "Precio por definir"}</p>
-              <ul className="mt-4 flex-1 space-y-2 text-sm">
-                {p.features.map((f) => (
-                  <li key={f} className="flex gap-2 text-muted">
-                    <Check size={14} className="mt-0.5 shrink-0 text-up" /> {f}
-                  </li>
-                ))}
-              </ul>
-              {!current && id !== "free" && (
-                <Button className="mt-5" disabled title="Pagos aún no disponibles">
-                  Próximamente
-                </Button>
-              )}
-            </Panel>
-          );
-        })}
-      </div>
-      <div className="mt-3">
-        <InfoNote>
-          Los pagos todavía no están habilitados. Durante la beta, el plan se asigna manualmente — contacta al equipo si quieres probar Pro o
-          Premium.
-        </InfoNote>
+      <div className="mt-5">
+        <SubscriptionPanel me={me} />
       </div>
       <p className="mt-8 max-w-3xl text-[11px] leading-relaxed text-faint">{DISCLAIMER}</p>
     </>
@@ -184,6 +154,85 @@ function NotificationsPanel({ me, onChange }: { me?: MeResponse; onChange: () =>
         <p className="text-[11px] text-faint">
           Email y Telegram aún no están disponibles; la arquitectura de canales está preparada para añadirlos.
         </p>
+      </div>
+    </Panel>
+  );
+}
+
+const STATUS: Record<string, string> = {
+  active: "Activa",
+  trialing: "En prueba",
+  past_due: "Pago pendiente",
+  canceled: "Cancelada",
+  unpaid: "Impagada",
+  incomplete: "Incompleta",
+};
+
+function SubscriptionPanel({ me }: { me?: MeResponse }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  useEffect(() => {
+    Promise.resolve().then(() => setSuccess(new URLSearchParams(window.location.search).get("billing") === "success"));
+  }, []);
+
+  async function portal() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api<{ url: string }>("/api/billing/portal", { method: "POST", json: {} });
+      window.location.assign(r.url);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Error");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Panel>
+      <PanelHeader title="Suscripción" />
+      <div className="space-y-3 p-4 text-sm">
+        {success && (
+          <p className="rounded-md border border-up/25 bg-up/5 px-3 py-2 text-up">
+            ¡Pago completado! Tu plan se actualiza en cuanto Stripe confirma el pago (normalmente en segundos).
+          </p>
+        )}
+        {!me ? (
+          <Skeleton className="h-16" />
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p>
+                  Plan <span className="font-medium">{me.plan.name}</span>{" "}
+                  <span className="num text-faint">· ${me.plan.priceUsd}/mes</span>
+                </p>
+                {me.subscription.status && (
+                  <p className="mt-0.5 text-xs text-muted">
+                    Estado: {STATUS[me.subscription.status] ?? me.subscription.status}
+                    {me.subscription.currentPeriodEnd && ` · renueva/termina ${formatDateTime(me.subscription.currentPeriodEnd)}`}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Link href="/pricing">
+                  <Button size="sm" variant={me.plan.id === "free" ? "primary" : "secondary"}>
+                    {me.plan.id === "free" ? "Mejorar plan" : "Ver planes"}
+                  </Button>
+                </Link>
+                {me.billingEnabled && me.subscription.hasCustomer && (
+                  <Button size="sm" onClick={portal} loading={busy}>
+                    Gestionar suscripción
+                  </Button>
+                )}
+              </div>
+            </div>
+            {!me.billingEnabled && (
+              <InfoNote>Los pagos todavía no están habilitados en este servidor. Durante la beta el plan se asigna manualmente.</InfoNote>
+            )}
+          </>
+        )}
+        {error && <ErrorNote>{error}</ErrorNote>}
       </div>
     </Panel>
   );

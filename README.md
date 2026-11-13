@@ -1,169 +1,165 @@
 # PeakAlert
 
-Monitor de memecoins con alertas configurables: caída desde el máximo, caída de volumen, pérdida de momentum, cruces de market cap y movimientos bruscos. Incluye un portfolio tracker y **Paper Exit** para medir si las alertas habrían servido.
+Plataforma SaaS para traders de memecoins: detecta **señales de posible agotamiento del impulso** (Peak Detection), envía **alertas explicadas** y ayuda a **proteger ganancias** (Profit Protection).
 
-> PeakAlert es una herramienta de monitoreo. No predice máximos, no da asesoramiento financiero y **no ejecuta operaciones**.
+> PeakAlert es una herramienta de monitoreo. La puntuación de riesgo es un **modelo heurístico transparente**, no una IA entrenada ni una probabilidad. No predice máximos con certeza, no da asesoramiento financiero y **no ejecuta operaciones**.
 
 ---
 
-## 1. Arquitectura
+## 1. Funcionalidades
+
+| Módulo | Qué hace |
+|---|---|
+| **Peak Detection** | Puntuación 0–100 de riesgo de agotamiento a partir de 8 factores ponderados, cada uno con su valor y explicación. Si falta historial para un factor, se excluye y se informa la *cobertura*. Bandas: 0–30 saludable · 31–60 precaución · 61–80 elevado · 81–100 muy elevado. También calcula una puntuación de *momentum* para el ranking. |
+| **Smart Alerts** | 10 tipos (ver §4). Se disparan una vez y se rearman con lógica anti-spam. Cada alerta incluye **qué pasa, por qué se generó, qué indicadores cambiaron, qué riesgo representa y qué vigilar**, además de una severidad. |
+| **Profit Protection** | Entrada por precio **o** market cap, monto invertido. Muestra P&L, ROI, beneficio máximo no realizado, caída desde el máximo, % de beneficio devuelto y una **simulación de trailing stops** (10–50 %) sobre los precios observados. Incluye alertas de trailing stop y de retroceso de beneficio. |
+| **Watchlist / Dashboard** | KPIs, resumen de mercado (SOL + tu watchlist), gráfica de precio y market cap, rankings de mayor riesgo y mayor momentum, alertas recientes y tabla con precio, variaciones, market cap, volumen, liquidez y riesgo. |
+| **Paper Exit** | Qué habría pasado si hubieras vendido en cada alerta (1 h / 24 h / 7 d). |
+| **Suscripciones** | Free / Pro ($5) / Premium ($10), página `/pricing` con comparación de planes y Stripe Checkout + Customer Portal + webhooks (**solo activos si configuras Stripe**). |
+| **Demo pública** | `/demo` muestra Peak Detection con **datos reales** de DexScreener. Si la API no responde, muestra valores ficticios con un aviso grande de **DATOS DE DEMOSTRACIÓN**. |
+
+### Factores de Peak Detection
+
+| Factor | Peso | Fuente |
+|---|---|---|
+| Pérdida de momentum (ritmo de 1 h vs. media de 6 h) | 20 | DexScreener |
+| Caída del volumen (1 h vs. promedio horario previo) | 15 | DexScreener |
+| Presión de venta (ventas/compras en 5 min y 1 h) | 15 | DexScreener (nº de transacciones) |
+| Caída desde el máximo reciente (6 h) | 15 | historial de PeakAlert |
+| Subida previa extrema (6 h / 24 h) | 10 | DexScreener |
+| Rechazos repetidos del máximo | 10 | historial de PeakAlert (≥ 1 h) |
+| Caída de liquidez | 10 | historial de PeakAlert |
+| Movimientos bruscos de market cap (5 min) | 5 | DexScreener |
+
+Código: `src/lib/risk/score.ts` (funciones puras, con tests).
+
+## 2. Arquitectura
 
 ```
 Navegador (Next.js client pages, SWR polling 30 s)
-   │  fetch /api/*  (cookie de sesión de Supabase)
+   │  /api/*  (cookie de sesión de Supabase)
    ▼
-Next.js Route Handlers  ── valida input (zod) + plan ──►  Supabase Postgres (service role)
-   │                                                     ▲   RLS: el usuario solo puede LEER lo suyo
-   │  refreshTokens()                                    │
-   ├─► DexScreener API (sin key)                         │
-   ├─► motor de alertas (funciones puras)  ──► alert_events + paper_exits
-   └─► Web Push (VAPID)                                  │
-                                                         │
-Supabase pg_cron (cada minuto) ──POST /api/cron/refresh──┘  (Bearer CRON_SECRET)
+Next.js Route Handlers ── zod + límites del plan ──► Supabase Postgres (service role; RLS = solo lectura propia)
+   │ refreshTokens()
+   ├─► DexScreener (sin key)  ──fallback──► Birdeye (opcional, Solana)
+   ├─► historial propio (snapshots ~1/min) ─► Peak Detection (riesgo + momentum)
+   ├─► motor de alertas (puro) ─► alert_events (+explicación) + paper_exits
+   ├─► picos de posiciones (Profit Protection)
+   └─► Web Push (VAPID; urgencia alta para Premium y señales críticas)
+Supabase pg_cron (cada minuto) ── POST /api/cron/refresh (Bearer CRON_SECRET)
+Stripe ── webhook firmado ──► /api/billing/webhook ──► profiles.plan
 ```
 
-| Capa | Tecnología | Por qué |
-|---|---|---|
-| Frontend | Next.js 16 (App Router) + TypeScript + Tailwind v4 | Lo pediste; un solo repo para UI y API |
-| Gráficas | TradingView Lightweight Charts (Apache-2.0, muestra el logo de atribución) + sparklines SVG | Estética de terminal, ligera |
-| Auth + DB | Supabase (email/contraseña + enlace mágico, Postgres con RLS) | Lo pediste; adecuado |
-| Datos | DexScreener API pública | Cubre Solana/EVM, sin API key |
-| Job | **Supabase pg_cron + pg_net** → `/api/cron/refresh` | Ver nota abajo |
-| Hosting | Vercel | Lo pediste; adecuado |
-| Notificaciones | Web Push estándar (librería `web-push`, service worker `public/sw.js`) | Funciona en escritorio y Android; iOS 16.4+ si la app se instala |
+Stack: Next.js 16 + TypeScript + Tailwind v4, Supabase (Auth + Postgres + RLS), DexScreener / Birdeye, Stripe, Web Push, Vercel. Se conservó todo lo de la v1.
 
-**Cambio respecto a tu propuesta — el cron:** Vercel Cron en el plan Hobby solo permite ejecuciones **diarias**, lo cual no sirve para alertas. Por eso el job programado vive en Supabase (`pg_cron`, gratis), que llama a la API cada minuto. Si usas Vercel Pro, también puedes usar Vercel Cron.
+**Por qué el cron va en Supabase:** Vercel Cron en el plan Hobby solo permite ejecuciones diarias.
 
-**Seguridad:**
-- Ninguna clave secreta llega al navegador. Solo `NEXT_PUBLIC_SUPABASE_URL`, la publishable key y la clave pública VAPID son públicas (están diseñadas para eso).
-- Todas las escrituras pasan por API routes que autentican al usuario, validan con zod y aplican los límites del plan; luego escriben con la service key. Las políticas RLS solo permiten **leer** filas propias, así un usuario no puede saltarse los límites llamando a Supabase directamente.
-- El límite de tokens por plan también se aplica en la base de datos (trigger con lock por usuario).
-- El endpoint del cron compara el secreto en tiempo constante.
+**Seguridad:** ninguna clave secreta llega al navegador. Todas las escrituras pasan por la API (autenticación, validación zod y límites del plan). Las políticas RLS solo permiten **leer** filas propias, y el límite de tokens se aplica también por trigger en la base de datos. Las funciones de plan (desglose de factores, historial de señales, Profit Protection) se recortan **en el servidor**, no solo en la UI. Los webhooks de Stripe siempre verifican la firma.
 
-## 2. API de mercado y sus limitaciones
+## 3. Datos de mercado y limitaciones
 
-**DexScreener** (`https://api.dexscreener.com`, sin key):
-- `GET /latest/dex/tokens/{address}` — búsqueda en todas las redes (se usa al agregar un token).
-- `GET /tokens/v1/{chain}/{a1,a2,…}` — hasta **30 direcciones** por llamada (se usa para refrescar).
-- Límite: **300 req/min**. Respuestas cacheadas ~30 s en su CDN → PeakAlert no refresca un token más de una vez cada 30 s.
-- **No hay histórico/OHLC.** Por eso PeakAlert guarda sus propios *snapshots* (≈1/min) y:
-  - el "máximo" es el **máximo observado por PeakAlert** desde que sigue el token (no el ATH real);
-  - un pico que dure menos que el intervalo entre lecturas puede no registrarse;
-  - las gráficas empiezan cuando empiezas a seguir el token.
-- `marketCap`, `fdv` o liquidez pueden faltar: se muestran como "—", nunca se inventan.
-- Se toma el par con **más liquidez** donde el token es el *base token*. En tokens con liquidez muy baja el precio puede ser poco fiable (la UI lo advierte).
-- Si DexScreener falla, se conservan los últimos datos válidos, se marca el error y la UI muestra la antigüedad de los datos. **El motor nunca evalúa alertas con datos de más de 10 minutos.**
+- **DexScreener** (sin key): 300 req/min, hasta 30 direcciones por llamada y caché de unos 30 s. No ofrece histórico: PeakAlert guarda el suyo (8 días), así que "máximo", "rechazos", "caída de liquidez" y "media de 1 h" **empiezan a funcionar cuando el token empieza a monitorearse** (se necesitan minutos, o ≥ 1 h para los rechazos). La UI marca la cobertura parcial con `*`.
+- Los picos que duren menos que el intervalo entre lecturas (~1 min) pueden no registrarse.
+- La presión de venta usa el **número** de transacciones (DexScreener no separa el volumen por lado).
+- El market cap de entrada se convierte a precio con la relación precio/market cap **actual** (supone que la supply no cambió).
+- **Birdeye** (opcional, `BIRDEYE_API_KEY`) solo se usa como respaldo para tokens de Solana sin datos en DexScreener. ⚠️ **No está verificado contra la API real** (no había key en el entorno de desarrollo); el parseo es tolerante y los campos que faltan quedan vacíos.
+- Nunca se inventan datos: los valores ausentes se muestran como "—". La única excepción es la demo sin conexión, que se etiqueta como datos de demostración.
 
-## 3. Estructura
-
-```
-supabase/
-  migrations/0001_init.sql   esquema, RLS, triggers, funciones (idempotente)
-  cron.sql                   job cada minuto (pg_cron + pg_net + Vault)
-public/sw.js                 service worker (solo push)
-src/
-  proxy.ts                   refresca la sesión y protege rutas (antes "middleware")
-  app/
-    page.tsx                 landing
-    login/ signup/ auth/callback/
-    (app)/dashboard|tokens/[id]|alerts|portfolio|analytics|settings
-    api/
-      watchlist/  tokens/lookup  tokens/[id]
-      alerts/rules  alerts/events  alerts/events/read
-      positions/  push/subscribe  push/test  me/  analytics/
-      cron/refresh/              job de fondo
-      billing/checkout|webhook   preparados, devuelven 501
-  components/                UI (sin librería de componentes)
-  lib/
-    alerts/engine.ts         motor de alertas puro (+ tests)
-    market/dexscreener.ts    cliente con timeout, reintentos y validación
-    market/refresh.ts        refresco → snapshots → alertas → paper exit → push
-    notifications/           canales (Web Push implementado)
-    plans.ts                 límites y funciones por plan
-    billing/                 estructura para Stripe (no activa)
-    paper-exit.ts portfolio.ts format.ts validation.ts
-```
-
-## 4. Cómo funcionan las alertas
-
-Todas son *edge-triggered* para no repetir avisos: se disparan una vez, se desarman y se **rearman** cuando la condición desaparece (o, en la caída desde máximo, cuando se marca un **nuevo máximo**). Además hay un cooldown (60 min; configurable en Premium). Un bloqueo optimista (`version`) evita duplicados si dos procesos evalúan a la vez.
+## 4. Alertas
 
 | Tipo | Condición | Plan |
 |---|---|---|
-| Caída desde el máximo | precio ≤ máximo registrado − X %. Opcional: solo si el market cap máximo superó Y (p. ej. "si llega a $1M y cae 15 %") | Free+ |
-| Movimiento brusco | variación 5 min o 1 h ≥ X % (sube, baja o ambas) | Free+ |
-| Caída del volumen | volumen 1 h vs. promedio horario de las 5 h previas ((vol6h − vol1h)/5) | Pro+ |
-| Pérdida de momentum | heurística: +X % en 6 h, −Y % en 1 h y ventas ≥ Z × compras en 1 h | Pro+ |
-| Cruce de market cap | cruza por encima/debajo de un valor (no se dispara si ya estaba del otro lado al crearla) | Pro+ |
+| Caída desde el máximo | −X % desde el máximo registrado (opcional: solo si el market cap máximo superó Y) | Free+ |
+| Movimiento brusco | ±X % en 5 min / 1 h | Free+ |
+| Caída del volumen | volumen 1 h vs. promedio de las 5 h previas | Free+ |
+| Riesgo de agotamiento | puntuación ≥ X, con cobertura mínima; histéresis de 10 puntos | Pro+ |
+| Pérdida de momentum | +X % en 6 h, −Y % en 1 h, ventas ≥ Z × compras | Pro+ |
+| Ruptura de tendencia | precio X % bajo su media de 1 h tras subir en 6 h | Pro+ |
+| Movimiento anormal de liquidez | liquidez −X % en 1 h / 6 h | Pro+ |
+| Cruce de market cap | cruza por encima/debajo de un nivel | Pro+ |
+| Trailing stop (posición) | −X % desde el máximo desde tu entrada | Pro+ |
+| Retroceso de beneficio (posición) | devolver X % del beneficio máximo tras +Y % | Pro+ |
 
-Se evalúan cada vez que se refresca un token: cada minuto con el cron, y cada 30 s mientras alguien tiene el dashboard abierto.
+Anti-spam: se dispara una vez y se rearma cuando la condición desaparece (o con un nuevo máximo en las alertas basadas en picos); cooldown de 60 min (configurable en Premium); bloqueo optimista contra duplicados. No se evalúa con datos de más de 10 min. Los textos nunca afirman que el precio *va a* caer ni recomiendan vender.
 
-**Paper Exit:** al dispararse una alerta se guarda el precio. Luego se registran el primer precio observado tras 1 h, 24 h y 7 d, más el máximo y mínimo posteriores. Si tenías una posición abierta se calcula también la diferencia en USD.
+## 5. Planes
 
-## 5. Configuración paso a paso
+| | Free | Pro $5/mes | Premium $10/mes |
+|---|---|---|---|
+| Tokens | 3 | 25 | 100 |
+| Puntuación de riesgo | ✓ | ✓ | ✓ |
+| Desglose de factores | — | ✓ | ✓ |
+| Alertas | básicas | todas | todas |
+| Profit Protection | — | ✓ | ✓ |
+| Historial de alertas | 24 h | 7 días | completo |
+| Historial de señales (gráfica de riesgo) | — | — | ✓ |
+| Alertas prioritarias (push urgencia alta) | — | — | ✓ |
+| Analíticas de efectividad | — | — | ✓ |
+| Cooldown configurable | — | — | ✓ |
 
-### 5.1 Supabase
+Definición única: `src/lib/plans.ts`. El límite de tokens está duplicado en `plan_token_limit()` (SQL).
+
+## 6. Configuración paso a paso
+
+### 6.1 Supabase
 1. Crea un proyecto en <https://supabase.com/dashboard>.
-2. **SQL Editor → New query**, pega todo `supabase/migrations/0001_init.sql` y pulsa **Run**.
-3. **Project Settings → API Keys**: copia la *Publishable key* y la *Secret key* (o las legacy *anon* y *service_role*). La URL está en **Project Settings → Data API**.
-4. **Authentication → URL Configuration**:
-   - *Site URL*: `http://localhost:3000` en desarrollo (luego tu dominio de Vercel).
-   - *Redirect URLs*: añade `http://localhost:3000/auth/callback` y `https://TU-DOMINIO/auth/callback`.
-5. (Opcional) **Authentication → Providers → Email**: puedes desactivar "Confirm email" para pruebas rápidas.
-   El SMTP incluido en Supabase tiene un límite muy bajo de emails por hora; para usuarios reales configura un SMTP propio (Resend, Postmark…).
+2. **SQL Editor** → ejecuta **en orden** `supabase/migrations/0001_init.sql` y `0002_peak_detection.sql`. Ambos se pueden volver a ejecutar sin problema.
+   *Si ya tenías la v1 desplegada, ejecuta solo `0002`.*
+3. **Project Settings → API Keys**: copia la *Publishable key* y la *Secret key*. La URL está en **Data API**.
+4. **Authentication → URL Configuration**: *Site URL* = tu dominio. En *Redirect URLs* añade `https://TU-DOMINIO/auth/callback` (y `http://localhost:3000/auth/callback`).
+5. Para usuarios reales configura un SMTP propio (**Authentication → Emails**). El SMTP incluido tiene un límite muy bajo.
 
-### 5.2 Variables de entorno
+### 6.2 Variables de entorno
 ```bash
 cp .env.example .env.local
 openssl rand -hex 32                 # → CRON_SECRET
 npx web-push generate-vapid-keys     # → NEXT_PUBLIC_VAPID_PUBLIC_KEY y VAPID_PRIVATE_KEY
 ```
-Rellena `.env.local`. `VAPID_SUBJECT` debe ser `mailto:tu@email.com` o una URL tuya.
 
-### 5.3 Ejecutar en local
+| Variable | Obligatoria | Dónde conseguirla |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | Sí | Supabase |
+| `CRON_SECRET` | Sí | `openssl rand -hex 32` |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Para push | `npx web-push generate-vapid-keys`; subject = `mailto:tu@email` |
+| `BIRDEYE_API_KEY` | No | <https://bds.birdeye.so> → API key |
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PREMIUM` | Para cobrar | Ver 6.5 |
+
+### 6.3 Local
 ```bash
 npm install
 npm run dev          # http://localhost:3000
-npm test             # tests unitarios
-npm run test:live    # tests contra la API real de DexScreener
+npm test             # 42 tests unitarios
+npm run test:live    # tests contra DexScreener real
 ```
 
-### 5.4 Desplegar en Vercel
-1. Importa el repo en <https://vercel.com/new>.
-2. **Settings → Environment Variables**: añade todas las de `.env.local` (Production y Preview).
-3. Deploy. Actualiza *Site URL* y *Redirect URLs* en Supabase con tu dominio.
-   Las variables `NEXT_PUBLIC_*` se incrustan al compilar: si las cambias, vuelve a desplegar.
+### 6.4 Vercel + job
+1. Importa el repo en Vercel, añade las variables y despliega.
+2. En Supabase → SQL Editor ejecuta `supabase/cron.sql`, reemplazando antes `<APP_URL>` y `<CRON_SECRET>`.
+3. Comprueba: `select status_code, content from net._http_response order by created desc limit 5;` debe devolver 200.
 
-### 5.5 Activar el job de fondo
-En Supabase → SQL Editor, abre `supabase/cron.sql`, reemplaza `<APP_URL>` y `<CRON_SECRET>` y ejecútalo. Comprueba:
+### 6.5 Stripe (activar cobros)
+1. En Stripe → **Product catalog**: crea "PeakAlert Pro" con precio recurrente de **$5/mes** y "PeakAlert Premium" con **$10/mes**. Copia los `price_...` en `STRIPE_PRICE_PRO` y `STRIPE_PRICE_PREMIUM`.
+2. **Developers → API keys** → `STRIPE_SECRET_KEY` (usa primero `sk_test_...`).
+3. **Developers → Webhooks** → endpoint `https://TU-DOMINIO/api/billing/webhook` con los eventos `checkout.session.completed` y `customer.subscription.created`, `.updated` y `.deleted`. Copia el *signing secret* en `STRIPE_WEBHOOK_SECRET`.
+4. **Settings → Billing → Customer portal**: actívalo y permite cambiar de plan y cancelar.
+5. Vuelve a desplegar. `/pricing` mostrará los botones de pago. Prueba con la tarjeta `4242 4242 4242 4242`.
+
+Sin estas cuatro variables, los pagos están **desactivados**: los botones dicen "Próximamente" y las rutas responden 501.
+
+Mientras no actives Stripe, puedes cambiar el plan de un usuario a mano:
 ```sql
-select status_code, content from net._http_response order by created desc limit 5;
-```
-Debe devolver `200` con `{"ok":true,…}`. Prueba manual:
-```bash
-curl -H "Authorization: Bearer $CRON_SECRET" https://TU-DOMINIO/api/cron/refresh
+update public.profiles set plan = 'pro' where email = 'usuario@ejemplo.com';
 ```
 
-### 5.6 Cambiar el plan de un usuario (mientras no hay pagos)
-```sql
-update public.profiles set plan = 'pro' where email = 'usuario@ejemplo.com';   -- 'free' | 'pro' | 'premium'
-```
+## 7. Estado: qué está verificado y qué no
 
-## 6. Monetización / Stripe — preparado, no implementado
-Ya existe: columna `profiles.plan` y columnas `stripe_*`, límites aplicados en servidor y BD, `applySubscription()` (mapea un Price ID a un plan), y rutas `/api/billing/checkout` y `/api/billing/webhook` que hoy responden **501**. No hay precios definidos.
-
-Para activarlo: `npm i stripe` → crea los productos y precios en Stripe → define `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PREMIUM` → implementa la creación de la Checkout Session y la verificación de firma del webhook (que llama a `applySubscription`) → añade el enlace al Customer Portal en Ajustes.
-
-## 7. Estado: qué funciona y qué no
-
-**Implementado y probado:**
-- Motor de alertas, P&L, Paper Exit y formateo: 17 tests unitarios.
-- Cliente de DexScreener contra la API real: 4 tests (`npm run test:live`).
-- Migración SQL probada en Postgres 16 (con un stub del esquema `auth`): idempotente, límite de plan por trigger, aislamiento RLS y permisos de funciones.
+**Verificado en este entorno:**
+- 42 tests unitarios: motor de riesgo, los 10 tipos de alerta y sus explicaciones, anti-spam, simulación de trailing stops, Profit Protection, Paper Exit, contexto de historial y lógica de Stripe (mapeo de planes, sincronización y verificación de firmas de webhook).
+- 4 tests contra la API real de DexScreener. La demo pública se probó con datos en vivo.
+- Las migraciones se probaron en Postgres 16: instalación limpia, actualización desde la v1 y doble ejecución.
 - `next build`, `tsc` y `eslint` sin errores.
-- Interfaz revisada con Playwright en escritorio y móvil (con la API simulada).
-- Cifrado Web Push con VAPID verificado localmente.
+- La UI se revisó con Playwright en escritorio y móvil, con la API simulada.
 
-**No verificado en este entorno** (no había un proyecto Supabase): el flujo completo contra un Supabase real (registro, emails, PostgREST, `pg_cron`) y la entrega real de push a un navegador. Haz una prueba de punta a punta tras configurarlo (sección 5).
+**No verificado** (no había cuentas ni claves en este entorno): el flujo completo contra un Supabase real (auth, PostgREST, pg_cron), la entrega real de push, Stripe en vivo (Checkout, Portal, webhooks reales) y Birdeye.
 
-**No implementado todavía:** pagos con Stripe, notificaciones por email/Telegram (la interfaz de canales está lista en `src/lib/notifications`), venta parcial de posiciones, recuperación de contraseña (hay enlace mágico como alternativa), límites de rate por usuario en la API.
+**Pendiente:** notificaciones por email/Telegram (la interfaz de canales ya existe), ventas parciales, recuperación de contraseña (hay enlace mágico como alternativa) y límites de rate por usuario en la API.

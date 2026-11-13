@@ -28,11 +28,20 @@ export function PriceChart({
   markers = [],
   entryPrice,
   height = 300,
+  format = formatPrice,
+  color: fixedColor,
+  lines = [],
 }: {
   points: ChartPoint[];
   markers?: ChartMarker[];
   entryPrice?: number | null;
   height?: number;
+  /** Axis/crosshair formatter (price by default; pass formatUsdCompact for market cap). */
+  format?: (v: number) => string;
+  /** Fixed line color (e.g. for the risk score); default = green/red by trend. */
+  color?: string;
+  /** Extra horizontal reference lines. */
+  lines?: { value: number; label: string; color?: string }[];
 }) {
   const el = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -59,7 +68,7 @@ export function PriceChart({
         vertLine: { color: "#5c626c", style: LineStyle.Dashed, labelBackgroundColor: "#14171b" },
         horzLine: { color: "#5c626c", style: LineStyle.Dashed, labelBackgroundColor: "#14171b" },
       },
-      localization: { priceFormatter: (p: number) => formatPrice(p) },
+      localization: { priceFormatter: (p: number) => format(p) },
     });
     chartRef.current = chart;
 
@@ -67,18 +76,25 @@ export function PriceChart({
       .map((p) => ({ time: Math.floor(Date.parse(p.t) / 1000) as UTCTimestamp, value: Number(p.price) }))
       .filter((p) => Number.isFinite(p.value));
     const up = data.length < 2 || data[data.length - 1].value >= data[0].value;
-    const color = up ? "#2ebd85" : "#f6465d";
+    const color = fixedColor ?? (up ? "#2ebd85" : "#f6465d");
+    const hexToRgba = (hex: string, a: number) => {
+      const n = parseInt(hex.slice(1), 16);
+      return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+    };
 
     const series = chart.addSeries(AreaSeries, {
       lineColor: color,
       lineWidth: 2,
-      topColor: up ? "rgba(46,189,133,0.18)" : "rgba(246,70,93,0.18)",
+      topColor: hexToRgba(color, 0.18),
       bottomColor: "rgba(0,0,0,0)",
       priceLineVisible: true,
       priceLineColor: color,
-      priceFormat: { type: "custom", formatter: (p: number) => formatPrice(p), minMove: 1e-12 },
+      priceFormat: { type: "custom", formatter: (p: number) => format(p), minMove: 1e-12 },
     });
     series.setData(data);
+    for (const l of lines) {
+      series.createPriceLine({ price: l.value, color: l.color ?? "#5c626c", lineStyle: LineStyle.Dotted, lineWidth: 1, axisLabelVisible: false, title: l.label });
+    }
 
     if (entryPrice) {
       series.createPriceLine({
@@ -114,7 +130,8 @@ export function PriceChart({
       chart.remove();
       chartRef.current = null;
     };
-  }, [points, markers, entryPrice, height]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `format`/`lines` are recreated per render; points drive redraws
+  }, [points, markers, entryPrice, height, fixedColor]);
 
   return <div ref={el} style={{ height }} className="w-full" />;
 }

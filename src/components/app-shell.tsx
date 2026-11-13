@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
-import { Bell, BriefcaseBusiness, ChartNoAxesColumn, LayoutGrid, LogOut, Settings, Siren } from "lucide-react";
+import { Bell, ChartNoAxesColumn, LayoutGrid, LogOut, Settings, ShieldCheck, Siren, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { LogoMark } from "./brand";
 import { cn } from "./ui";
@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
   { href: "/alerts", label: "Alertas", icon: Siren },
-  { href: "/portfolio", label: "Portfolio", icon: BriefcaseBusiness },
+  { href: "/portfolio", label: "Protección", icon: ShieldCheck },
   { href: "/analytics", label: "Analíticas", icon: ChartNoAxesColumn },
   { href: "/settings", label: "Ajustes", icon: Settings },
 ];
@@ -68,6 +68,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <p className="mt-0.5 text-[11px] text-faint">
                 Plan <span className="text-text">{me.plan.name}</span> · {me.usage.tokens}/{me.plan.maxTokens} tokens
               </p>
+              {me.plan.id !== "premium" && (
+                <Link href="/pricing" className="mt-2 flex items-center gap-1.5 rounded-md border border-line-strong bg-panel px-2 py-1.5 text-xs text-text hover:bg-panel-2">
+                  <Sparkles size={12} className="text-warn" /> Mejorar plan
+                </Link>
+              )}
             </div>
           )}
           <button

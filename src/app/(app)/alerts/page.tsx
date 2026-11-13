@@ -9,12 +9,13 @@ import { BellOff, Pause, Play, Plus, Siren, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/app-shell";
 import { AlertRuleForm, describeRule } from "@/components/alert-rule-form";
 import { PaperExitDetails } from "@/components/paper-exit";
+import { AlertExplanationCard, SeverityBadge } from "@/components/alert-explanation";
 import { TokenAvatar } from "@/components/token-bits";
 import { Badge, Button, EmptyState, Field, InfoNote, Modal, Panel, Segmented, Select, Skeleton, cn } from "@/components/ui";
 import { ALERT_META } from "@/lib/alerts/types";
 import { api, fetcher } from "@/lib/client/api";
-import type { EventDTO, MeResponse, RuleDTO, WatchlistResponse } from "@/lib/client/types";
-import { formatDateTime, formatPrice, formatUsdCompact, timeAgo, toNum } from "@/lib/format";
+import type { EventDTO, MeResponse, PositionDTO, RuleDTO, WatchlistResponse } from "@/lib/client/types";
+import { formatDateTime, formatPrice, formatUsd, formatUsdCompact, timeAgo, toNum } from "@/lib/format";
 
 type Tab = "rules" | "history";
 
@@ -61,8 +62,12 @@ function RulesTab() {
   const { data, mutate, isLoading } = useSWR<{ rules: RuleDTO[] }>("/api/alerts/rules", fetcher);
   const { data: wl } = useSWR<WatchlistResponse>("/api/watchlist", fetcher);
   const { data: me } = useSWR<MeResponse>("/api/me", fetcher);
+  const { data: pos } = useSWR<{ positions: PositionDTO[] }>(me?.plan.portfolio ? "/api/positions" : null, fetcher);
   const [creating, setCreating] = useState(false);
   const [tokenId, setTokenId] = useState<string>("");
+  const openPositions = (pos?.positions ?? [])
+    .filter((p) => p.token_id === tokenId && p.exit_price == null)
+    .map((p) => ({ id: p.id, label: `${formatUsd(toNum(p.invested_usd))} @ ${formatPrice(toNum(p.entry_price))}` }));
 
   const tokens = wl?.tokens ?? [];
 
@@ -113,6 +118,7 @@ function RulesTab() {
                   <span className="text-sm text-muted">· {ALERT_META[r.type].label}</span>
                   {!r.enabled ? <Badge>pausada</Badge> : r.armed ? <Badge tone="up">vigilando</Badge> : <Badge tone="warn">disparada · esperando rearme</Badge>}
                   {me && !me.plan.alertTypes.includes(r.type) && <Badge tone="warn">requiere Pro</Badge>}
+                  {r.position && <Badge>posición {formatPrice(toNum(r.position.entry_price))}</Badge>}
                 </div>
                 <p className="mt-0.5 truncate text-xs text-faint">
                   {describeRule(r)} · cooldown {r.cooldown_minutes} min
@@ -149,6 +155,7 @@ function RulesTab() {
               key={tokenId}
               tokenId={tokenId}
               me={me}
+              positions={openPositions}
               onSaved={() => {
                 setCreating(false);
                 setTokenId("");
@@ -191,8 +198,8 @@ function HistoryTab() {
     <div className="space-y-3">
       {historyHours != null && (
         <InfoNote>
-          Tu plan {me?.plan.name} muestra las alertas de las últimas {historyHours} h. El historial completo está disponible en Pro y Premium.{" "}
-          <Link href="/settings" className="text-text underline underline-offset-2">Ver planes</Link>
+          Tu plan {me?.plan.name} muestra las alertas de {historyHours >= 48 ? `los últimos ${Math.round(historyHours / 24)} días` : `las últimas ${historyHours} h`}. El historial completo está en Premium.{" "}
+          <Link href="/pricing" className="text-text underline underline-offset-2">Ver planes</Link>
         </InfoNote>
       )}
       <Panel>
@@ -225,17 +232,19 @@ function HistoryTab() {
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-sm">{e.title}</span>
                       <Badge>{ALERT_META[e.type]?.short}</Badge>
+                      <SeverityBadge severity={e.severity} />
                     </div>
-                    <p className="mt-0.5 text-xs text-muted">{e.message}</p>
+                    <p className="mt-0.5 text-xs text-muted">{e.explanation?.what ?? e.message}</p>
                     <p className="mt-1 text-[11px] text-faint">
                       {formatDateTime(e.created_at)} · {timeAgo(e.created_at)}
                       {e.notified_at ? " · push enviado" : e.notify_error ? " · push no entregado" : ""}
                     </p>
                   </div>
                 </button>
-                {open === e.id && e.paper && (
-                  <div className="px-4 pb-4 sm:pl-[60px]">
-                    <PaperExitDetails paper={e.paper} />
+                {open === e.id && (
+                  <div className="space-y-3 px-4 pb-4 sm:pl-[60px]">
+                    {e.explanation ? <AlertExplanationCard e={e.explanation} /> : <p className="text-xs text-muted">{e.message}</p>}
+                    {e.paper && <PaperExitDetails paper={e.paper} />}
                     {e.token && (
                       <Link href={`/tokens/${e.token.id}`} className="mt-2 inline-block text-xs text-muted hover:text-text">
                         Ver {e.token.symbol} →

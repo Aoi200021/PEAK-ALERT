@@ -1,11 +1,15 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { evaluateRule } from "../alerts/engine";
-import type { AlertType, MarketData } from "../alerts/types";
+import type { AlertExplanation, AlertType, MarketContext, MarketData, Severity } from "../alerts/types";
 import { toNum } from "../format";
 import { notifyUser } from "../notifications";
 import { advancePaperExit, type PaperExitRow } from "../paper-exit";
-import { fetchPairsForChain, MarketApiError, pairToTokenRow } from "./dexscreener";
+import { avgPriceLastHour, liquidityChangePct, parseSeriesRow } from "../risk/context";
+import { computeMomentum, computeRisk, type RiskMarket, type SeriesPoint } from "../risk/score";
+import { getPlan } from "../plans";
+import { birdeyeEnabled, fetchBirdeyeRow } from "./birdeye";
+import { fetchPairsForChain, MarketApiError, pairToTokenRow, type MarketRow } from "./dexscreener";
 
 /** DexScreener caches ~30 s, so refreshing more often only burns rate limit. */
 export const STALE_AFTER_MS = 30_000;
@@ -28,12 +32,16 @@ export interface TokenRow {
   change_h1: number | string | null;
   change_h6: number | string | null;
   change_h24: number | string | null;
-  txns: { h1?: { buys?: number; sells?: number } | null } | null;
+  txns: { m5?: { buys?: number; sells?: number } | null; h1?: { buys?: number; sells?: number } | null } | null;
   peak_price: number | string | null;
   peak_market_cap: number | string | null;
   peak_at: string | null;
   data_updated_at: string | null;
   last_snapshot_at: string | null;
+  risk_score?: number | null;
+  risk_factors?: unknown;
+  risk_coverage?: number | string | null;
+  risk_level?: string | null;
 }
 
 export function rowToMarket(row: TokenRow): MarketData {
@@ -55,7 +63,40 @@ export function rowToMarket(row: TokenRow): MarketData {
     },
     txnsH1: h1 ? { buys: h1.buys ?? 0, sells: h1.sells ?? 0 } : null,
     updatedAt: row.data_updated_at ? new Date(row.data_updated_at) : null,
+    liquidityUsd: toNum(row.liquidity_usd),
   };
+}
+
+export function rowToRiskMarket(row: TokenRow): RiskMarket {
+  const m = rowToMarket(row);
+  const m5 = row.txns?.m5;
+  return {
+    priceUsd: m.priceUsd,
+    marketCap: m.marketCap,
+    liquidityUsd: m.liquidityUsd ?? null,
+    volume: m.volume,
+    change: m.change,
+    txnsM5: m5 ? { buys: m5.buys ?? 0, sells: m5.sells ?? 0 } : null,
+    txnsH1: m.txnsH1,
+  };
+}
+
+/** Recent raw snapshots (last 6 h) for many tokens in one call. */
+export async function loadRecentSeries(admin: SupabaseClient, tokenIds: string[], sinceMs = 6 * 3600_000) {
+  const map = new Map<string, SeriesPoint[]>();
+  if (!tokenIds.length) return map;
+  const { data, error } = await admin.rpc("token_recent_series", {
+    p_tokens: tokenIds,
+    p_since: new Date(Date.now() - sinceMs).toISOString(),
+  });
+  if (error) {
+    console.error("[refresh] series failed", error.message);
+    return map;
+  }
+  for (const row of (data ?? []) as Array<Parameters<typeof parseSeriesRow>[0] & { token_id: string }>) {
+    map.set(row.token_id, parseSeriesRow(row));
+  }
+  return map;
 }
 
 export interface RefreshSummary {
@@ -97,43 +138,78 @@ export async function refreshTokens(
   const refreshed: TokenRow[] = [];
   const failures: { id: string; error: string }[] = [];
 
+  const series = await loadRecentSeries(admin, due.map((t) => t.id));
+  const contexts = new Map<string, MarketContext>();
+
   for (const [chainId, list] of byChain) {
-    let pairs;
+    let pairs = new Map<string, MarketRow>();
+    let chainError: string | null = null;
     try {
-      pairs = await fetchPairsForChain(chainId, list.map((t) => t.address));
+      const raw = await fetchPairsForChain(chainId, list.map((t) => t.address));
+      pairs = new Map([...raw].filter(([, p]) => p.priceUsd != null).map(([a, p]) => [a, pairToTokenRow(p)]));
     } catch (e) {
-      const msg = e instanceof MarketApiError ? e.message : "Error al consultar DexScreener";
-      summary.errors.push(`${chainId}: ${msg}`);
-      list.forEach((t) => failures.push({ id: t.id, error: msg }));
-      continue;
+      chainError = e instanceof MarketApiError ? e.message : "Error al consultar DexScreener";
+      summary.errors.push(`${chainId}: ${chainError}`);
     }
     for (const t of list) {
-      const pair = pairs.get(t.address);
-      if (!pair || pair.priceUsd == null) {
-        summary.missing++;
-        failures.push({ id: t.id, error: "Sin datos de mercado disponibles para este token" });
+      let row = pairs.get(t.address) ?? null;
+      let source = "dexscreener";
+      // Optional fallback: Birdeye for Solana tokens DexScreener couldn't serve.
+      if (!row && chainId === "solana" && birdeyeEnabled()) {
+        row = await fetchBirdeyeRow(t.address);
+        source = "birdeye";
+      }
+      if (!row || row.price_usd == null) {
+        if (!chainError) summary.missing++;
+        failures.push({ id: t.id, error: chainError ?? "Sin datos de mercado disponibles para este token" });
         continue;
       }
-      const row = pairToTokenRow(pair);
-      const price = row.price_usd!;
+      const price = row.price_usd;
       const prevPeak = toNum(t.peak_price);
       const prevPeakMc = toNum(t.peak_market_cap);
       const newPeak = prevPeak == null || price > prevPeak;
       const snapshotDue = !t.last_snapshot_at || now.getTime() - Date.parse(t.last_snapshot_at) >= SNAPSHOT_EVERY_MS;
+
+      // Peak Detection on the fresh data + PeakAlert's own history
+      const fresh = { ...t, ...row } as unknown as TokenRow;
+      const hist = series.get(t.id) ?? [];
+      const risk = computeRisk(rowToRiskMarket(fresh), hist, now.getTime());
+      const momentum = computeMomentum(rowToRiskMarket(fresh));
+      contexts.set(t.id, {
+        risk: {
+          score: risk.score,
+          coverage: risk.coverage,
+          level: risk.level,
+          summary: risk.summary,
+          factors: risk.factors.map((f) => ({ label: f.label, score: f.score, available: f.available, value: f.value })),
+        },
+        liquidityChange: {
+          "1h": liquidityChangePct(hist, row.liquidity_usd, 3600_000, now.getTime()),
+          "6h": liquidityChangePct(hist, row.liquidity_usd, 6 * 3600_000, now.getTime()),
+        },
+        avgPrice1h: avgPriceLastHour(hist, now.getTime()),
+      });
+
       const update = {
         id: t.id,
         chain_id: t.chain_id,
         address: t.address,
         ...row,
         peak_price: newPeak ? price : prevPeak,
-        peak_market_cap:
-          row.market_cap != null ? Math.max(prevPeakMc ?? 0, row.market_cap) : prevPeakMc,
+        peak_market_cap: row.market_cap != null ? Math.max(prevPeakMc ?? 0, row.market_cap) : prevPeakMc,
         // Bulk upsert sets missing keys to NULL → every row must carry the same keys.
         peak_at: newPeak ? now.toISOString() : t.peak_at,
         data_updated_at: now.toISOString(),
+        data_source: source,
         last_error: null,
         last_error_at: null,
         last_snapshot_at: snapshotDue ? now.toISOString() : t.last_snapshot_at,
+        risk_score: risk.score,
+        risk_level: risk.level,
+        risk_coverage: Number(risk.coverage.toFixed(3)),
+        risk_factors: risk.factors,
+        momentum_score: momentum,
+        risk_updated_at: now.toISOString(),
       };
       updates.push(update);
       refreshed.push({ ...t, ...update } as unknown as TokenRow);
@@ -146,6 +222,8 @@ export async function refreshTokens(
           liquidity_usd: row.liquidity_usd,
           volume_h1: row.volume_h1,
           volume_h24: row.volume_h24,
+          risk_score: risk.score,
+          momentum_score: momentum,
         });
       }
     }
@@ -171,10 +249,13 @@ export async function refreshTokens(
 
   if (refreshed.length === 0) return summary;
 
-  // ---- 3. Alerts ----
-  summary.alertsFired = await evaluateRulesFor(admin, refreshed, now);
+  // ---- 3. Positions: track the highest price since entry (Profit Protection) ----
+  const positions = await updatePositionPeaks(admin, refreshed, now);
 
-  // ---- 4. Paper exits ----
+  // ---- 4. Alerts ----
+  summary.alertsFired = await evaluateRulesFor(admin, refreshed, contexts, positions, now);
+
+  // ---- 5. Paper exits ----
   await advancePaperExits(admin, refreshed, now);
 
   return summary;
@@ -191,13 +272,50 @@ interface RuleRow {
   version: number;
   cooldown_minutes: number;
   last_triggered_at: string | null;
+  position_id: string | null;
 }
 
-async function evaluateRulesFor(admin: SupabaseClient, tokens: TokenRow[], now: Date): Promise<number> {
+interface PositionPeak {
+  id: string;
+  token_id: string;
+  entryPrice: number;
+  peakPrice: number;
+  quantity: number;
+  open: boolean;
+}
+
+async function updatePositionPeaks(admin: SupabaseClient, tokens: TokenRow[], now: Date) {
+  const prices = new Map(tokens.map((t) => [t.id, toNum(t.price_usd)]));
+  const out = new Map<string, PositionPeak>();
+  const { data } = await admin
+    .from("positions")
+    .select("id, token_id, entry_price, invested_usd, peak_price, exit_price")
+    .is("exit_price", null)
+    .in("token_id", [...prices.keys()]);
+  for (const p of data ?? []) {
+    const price = prices.get(p.token_id);
+    const entry = Number(p.entry_price);
+    const prevPeak = toNum(p.peak_price) ?? entry;
+    const peak = price != null ? Math.max(prevPeak, price) : prevPeak;
+    if (peak > prevPeak || p.peak_price == null) {
+      await admin.from("positions").update({ peak_price: peak, peak_at: now.toISOString() }).eq("id", p.id);
+    }
+    out.set(p.id, { id: p.id, token_id: p.token_id, entryPrice: entry, peakPrice: peak, quantity: Number(p.invested_usd) / entry, open: true });
+  }
+  return out;
+}
+
+async function evaluateRulesFor(
+  admin: SupabaseClient,
+  tokens: TokenRow[],
+  contexts: Map<string, MarketContext>,
+  positions: Map<string, PositionPeak>,
+  now: Date,
+): Promise<number> {
   const byId = new Map(tokens.map((t) => [t.id, t]));
   const { data: rules, error } = await admin
     .from("alert_rules")
-    .select("id, user_id, token_id, type, params, armed, state, version, cooldown_minutes, last_triggered_at")
+    .select("id, user_id, token_id, type, params, armed, state, version, cooldown_minutes, last_triggered_at, position_id")
     .eq("enabled", true)
     .in("token_id", [...byId.keys()]);
   if (error) throw error;
@@ -205,7 +323,13 @@ async function evaluateRulesFor(admin: SupabaseClient, tokens: TokenRow[], now: 
   let fired = 0;
   for (const rule of (rules ?? []) as RuleRow[]) {
     const token = byId.get(rule.token_id)!;
-    const market = rowToMarket(token);
+    const pos = rule.position_id ? positions.get(rule.position_id) : undefined;
+    // Position rules only make sense while the position is open.
+    if (rule.position_id && !pos) continue;
+    const market: MarketData = {
+      ...rowToMarket(token),
+      context: { ...contexts.get(token.id), ...(pos ? { position: { entryPrice: pos.entryPrice, peakPrice: pos.peakPrice, quantity: pos.quantity } } : {}) },
+    };
     const res = evaluateRule(
       {
         type: rule.type,
@@ -249,10 +373,12 @@ async function recordAlert(
   rule: RuleRow,
   token: TokenRow,
   market: MarketData,
-  event: { title: string; message: string; metrics: Record<string, unknown> },
+  event: { title: string; message: string; metrics: Record<string, unknown>; severity: Severity; explanation: AlertExplanation },
   now: Date,
 ) {
   const symbol = token.symbol ?? "Token";
+  const { data: profile } = await admin.from("profiles").select("plan").eq("id", rule.user_id).maybeSingle();
+  const plan = getPlan(profile?.plan);
   const { data: ev, error } = await admin
     .from("alert_events")
     .insert({
@@ -265,6 +391,8 @@ async function recordAlert(
       price_usd: market.priceUsd,
       market_cap: market.marketCap,
       metrics: event.metrics,
+      severity: event.severity,
+      explanation: event.explanation,
       created_at: now.toISOString(),
     })
     .select("id")
@@ -274,17 +402,16 @@ async function recordAlert(
     return;
   }
 
-  // Paper Exit: link to the user's open position on this token, if any.
+  // Paper Exit: link to the position the rule watches, or the user's open position on this token.
   if (market.priceUsd != null) {
-    const { data: pos } = await admin
+    let q = admin
       .from("positions")
       .select("id, entry_price, invested_usd")
       .eq("user_id", rule.user_id)
       .eq("token_id", token.id)
-      .is("exit_price", null)
-      .order("entry_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .is("exit_price", null);
+    if (rule.position_id) q = q.eq("id", rule.position_id);
+    const { data: pos } = await q.order("entry_at", { ascending: false }).limit(1).maybeSingle();
     await admin.from("paper_exits").insert({
       event_id: ev.id,
       user_id: rule.user_id,
@@ -300,9 +427,10 @@ async function recordAlert(
 
   const n = await notifyUser(admin, rule.user_id, {
     title: `${symbol}: ${event.title}`,
-    body: event.message,
-    url: `/tokens/${token.id}`,
+    body: event.explanation.what ? `${event.explanation.what} ${event.explanation.why}` : event.message,
+    url: `/alerts?tab=history`,
     tag: `rule-${rule.id}`,
+    urgency: plan.priorityAlerts || event.severity === "critical" ? "high" : "normal",
   });
   await admin
     .from("alert_events")

@@ -82,13 +82,23 @@ const isoDate = z.coerce.date().refine((d) => d.getTime() <= Date.now() + 5 * 60
   message: "La fecha no puede estar en el futuro",
 });
 
-export const createPositionSchema = z.object({
-  tokenId: uuidSchema,
-  entryPrice: positiveNumber,
-  investedUsd: positiveNumber,
-  entryAt: isoDate.optional(),
-  notes: z.string().trim().max(500).optional(),
-});
+/**
+ * Either an entry price or an entry market cap is required. With only a market cap,
+ * the server derives the entry price from the current price/market-cap ratio
+ * (assumes the circulating supply hasn't changed since the purchase).
+ */
+export const createPositionSchema = z
+  .object({
+    tokenId: uuidSchema,
+    entryPrice: positiveNumber.optional(),
+    entryMarketCap: positiveNumber.optional(),
+    investedUsd: positiveNumber,
+    entryAt: isoDate.optional(),
+    notes: z.string().trim().max(500).optional(),
+  })
+  .refine((v) => v.entryPrice != null || v.entryMarketCap != null, {
+    message: "Indica el precio de entrada o el market cap de entrada",
+  });
 
 /** exitPrice = null reopens the position. exitPrice without exitAt uses "now". */
 export const updatePositionSchema = z.object({

@@ -4,7 +4,7 @@ import { updatePositionSchema, uuidSchema } from "@/lib/validation";
 
 export const PATCH = handler(async (req: Request, ctx: RouteContext<"/api/positions/[id]">) => {
   const { user, plan, admin } = await requireUser();
-  if (!plan.portfolio) throw new HttpError(403, "PLAN_FEATURE", "El portfolio tracker está disponible en Pro y Premium.");
+  if (!plan.portfolio) throw new HttpError(403, "PLAN_FEATURE", "Profit Protection está disponible en Pro y Premium.");
   const { id } = await ctx.params;
   if (!uuidSchema.safeParse(id).success) throw new HttpError(400, "INVALID_ID", "ID no válido.");
   const body = updatePositionSchema.safeParse(await readJson(req));

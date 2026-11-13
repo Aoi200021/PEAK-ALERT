@@ -12,7 +12,7 @@ export const GET = handler(async (req: Request) => {
   let q = admin
     .from("alert_events")
     .select(
-      "id, type, title, message, price_usd, market_cap, metrics, created_at, read_at, notified_at, notify_error, rule_id, token:tokens(id, symbol, name, chain_id, image_url, price_usd), paper:paper_exits(alert_price, quantity, entry_price, checkpoints, max_price_after, min_price_after, last_price, last_checked_at, closed, position_id)",
+      "id, type, title, message, price_usd, market_cap, metrics, severity, explanation, created_at, read_at, notified_at, notify_error, rule_id, token:tokens(id, symbol, name, chain_id, image_url, price_usd, risk_score, risk_level), paper:paper_exits(alert_price, quantity, entry_price, checkpoints, max_price_after, min_price_after, last_price, last_checked_at, closed, position_id)",
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })

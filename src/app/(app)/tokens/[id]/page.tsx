@@ -8,6 +8,8 @@ import { ArrowLeft, Copy, ExternalLink, Pause, Pencil, Play, Plus, Trash2 } from
 import { AlertRuleForm, describeRule } from "@/components/alert-rule-form";
 import { ClosePositionForm, NewPositionForm } from "@/components/position-forms";
 import { PriceChart } from "@/components/price-chart";
+import { RiskFactors, RiskGauge, RISK_DISCLAIMER } from "@/components/risk";
+import type { AlertType } from "@/lib/alerts/types";
 import { ChainTag, DataAge, TokenAvatar } from "@/components/token-bits";
 import { Badge, Button, Delta, EmptyState, ErrorNote, InfoNote, Modal, Panel, PanelHeader, Segmented, Skeleton } from "@/components/ui";
 import { ALERT_META } from "@/lib/alerts/types";
@@ -17,11 +19,14 @@ import { formatDateTime, formatNumber, formatPrice, formatUsd, formatUsdCompact,
 import { positionPnl } from "@/lib/portfolio";
 
 type Range = "1h" | "6h" | "24h" | "7d";
+type Mode = "price" | "mcap" | "risk";
 
 interface TokenResponse {
   token: TokenDTO;
   watched: boolean;
-  history: { t: string; price: number }[];
+  riskBreakdown: boolean;
+  signalHistory: boolean;
+  history: { t: string; price: number; market_cap: number | null; risk_score: number | null }[];
   rules: RuleDTO[];
   positions: PositionDTO[];
   events: { id: string; title: string; created_at: string; price_usd: number; type: string }[];
@@ -31,18 +36,26 @@ interface TokenResponse {
 export default function TokenPage() {
   const { id } = useParams<{ id: string }>();
   const [range, setRange] = useState<Range>("24h");
+  const [mode, setMode] = useState<Mode>("price");
   const { data, error, mutate } = useSWR<TokenResponse>(`/api/tokens/${id}?range=${range}`, fetcher, {
     refreshInterval: 30_000,
     keepPreviousData: true,
   });
   const { data: me } = useSWR<MeResponse>("/api/me", fetcher);
-  const [ruleModal, setRuleModal] = useState<{ open: boolean; rule?: RuleDTO }>({ open: false });
+  const [ruleModal, setRuleModal] = useState<{ open: boolean; rule?: RuleDTO; type?: AlertType }>({ open: false });
   const [posModal, setPosModal] = useState(false);
   const [closing, setClosing] = useState<PositionDTO | null>(null);
 
   const t = data?.token;
   const price = toNum(t?.price_usd);
   const openPosition = data?.positions.find((p) => p.exit_price == null);
+  const chartPoints = useMemo(
+    () =>
+      (data?.history ?? [])
+        .map((h) => ({ t: h.t, price: Number(mode === "price" ? h.price : mode === "mcap" ? h.market_cap : h.risk_score) }))
+        .filter((p) => Number.isFinite(p.price) && (mode === "risk" ? p.price >= 0 : p.price > 0)),
+    [data?.history, mode],
+  );
   const markers = useMemo(
     () => (data?.events ?? []).map((e) => ({ t: e.created_at, label: ALERT_META[e.type as keyof typeof ALERT_META]?.short ?? "Alerta" })),
     [data?.events],
@@ -151,8 +164,18 @@ export default function TokenPage() {
         {/* Chart */}
         <Panel>
           <PanelHeader
-            title="Precio"
-            sub="Historial registrado por PeakAlert (snapshots cada ~1 min mientras el token está siendo monitoreado)"
+            title={
+              <Segmented<Mode>
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: "price", label: "Precio" },
+                  { value: "mcap", label: "Market cap" },
+                  ...(data.signalHistory ? [{ value: "risk" as const, label: "Riesgo" }] : []),
+                ]}
+              />
+            }
+            sub="Historial registrado por PeakAlert (≈ 1 punto por minuto mientras se monitorea)"
             actions={
               <Segmented<Range>
                 value={range}
@@ -167,12 +190,26 @@ export default function TokenPage() {
             }
           />
           <div className="p-2">
-            {data.history.length < 2 ? (
+            {chartPoints.length < 2 ? (
               <EmptyState title="Recopilando datos">
                 PeakAlert empezó a registrar este token hace poco. La gráfica se irá llenando con cada actualización.
               </EmptyState>
+            ) : mode === "risk" ? (
+              <PriceChart
+                key="risk"
+                points={chartPoints}
+                color="#f0883e"
+                format={(v) => v.toFixed(0)}
+                lines={[{ value: 30, label: "30" }, { value: 60, label: "60" }, { value: 80, label: "80" }]}
+              />
             ) : (
-              <PriceChart points={data.history} markers={markers} entryPrice={toNum(openPosition?.entry_price)} />
+              <PriceChart
+                key={mode}
+                points={chartPoints}
+                markers={markers}
+                entryPrice={mode === "price" ? toNum(openPosition?.entry_price) : null}
+                format={mode === "price" ? formatPrice : formatUsdCompact}
+              />
             )}
           </div>
           {txH24 && (
@@ -183,6 +220,30 @@ export default function TokenPage() {
         </Panel>
 
         <div className="space-y-5">
+          {/* Peak Detection */}
+          <Panel>
+            <PanelHeader
+              title="Peak Detection"
+              sub="Riesgo de agotamiento del impulso"
+              actions={
+                data.watched &&
+                me?.plan.alertTypes.includes("exhaustion_risk") && (
+                  <Button size="sm" onClick={() => setRuleModal({ open: true, type: "exhaustion_risk" })}>
+                    Alertarme
+                  </Button>
+                )
+              }
+            />
+            <div className="p-4">
+              <RiskGauge score={t.risk_score ?? null} coverage={toNum(t.risk_coverage)} />
+              {t.risk_updated_at && <p className="mt-2 text-center text-[11px] text-faint">Calculado {timeAgo(t.risk_updated_at)}</p>}
+              <div className="mt-5">
+                <RiskFactors factors={t.risk_factors} locked={!data.riskBreakdown} />
+              </div>
+              <p className="mt-4 text-[11px] leading-relaxed text-faint">{RISK_DISCLAIMER}</p>
+            </div>
+          </Panel>
+
           {/* Alerts */}
           <Panel>
             <PanelHeader
@@ -225,7 +286,7 @@ export default function TokenPage() {
           {/* Positions */}
           <Panel>
             <PanelHeader
-              title="Mi posición"
+              title="Profit Protection"
               actions={
                 me?.plan.portfolio && (
                   <Button size="sm" onClick={() => setPosModal(true)}>
@@ -236,7 +297,7 @@ export default function TokenPage() {
             />
             {!me?.plan.portfolio ? (
               <p className="px-4 py-6 text-center text-xs text-muted">
-                El portfolio tracker está disponible en Pro y Premium. <Link href="/settings" className="text-text underline underline-offset-2">Ver planes</Link>
+                Profit Protection está disponible en Pro y Premium. <Link href="/pricing" className="text-text underline underline-offset-2">Ver planes</Link>
               </p>
             ) : data.positions.length === 0 ? (
               <p className="px-4 py-6 text-center text-xs text-muted">Registra tu precio de entrada para ver tu P&amp;L estimado.</p>
@@ -261,6 +322,7 @@ export default function TokenPage() {
                       </div>
                       {pnl.closed && <p className="mt-1 text-faint">Vendida a {formatPrice(toNum(p.exit_price))} · {formatDateTime(p.exit_at)}</p>}
                       <div className="mt-2 flex gap-1.5">
+                        <Link href={`/portfolio/${p.id}`}><Button size="sm">Protección</Button></Link>
                         {!pnl.closed && <Button size="sm" onClick={() => setClosing(p)}>Registrar venta</Button>}
                         <Button size="sm" variant="ghost" onClick={() => deletePosition(p)}>Eliminar</Button>
                       </div>
@@ -275,10 +337,14 @@ export default function TokenPage() {
 
       <Modal open={ruleModal.open} onClose={() => setRuleModal({ open: false })} title={ruleModal.rule ? "Editar alerta" : `Nueva alerta · ${t.symbol}`}>
         <AlertRuleForm
-          key={ruleModal.rule?.id ?? "new"}
+          key={ruleModal.rule?.id ?? `new-${ruleModal.type ?? ""}`}
           tokenId={t.id}
           me={me}
           existing={ruleModal.rule}
+          initialType={ruleModal.type}
+          positions={data.positions
+            .filter((p) => p.exit_price == null)
+            .map((p) => ({ id: p.id, label: `${formatUsd(toNum(p.invested_usd))} @ ${formatPrice(toNum(p.entry_price))}` }))}
           onSaved={() => {
             setRuleModal({ open: false });
             mutate();
@@ -289,6 +355,7 @@ export default function TokenPage() {
         <NewPositionForm
           tokenId={t.id}
           currentPrice={price}
+          currentMarketCap={toNum(t.market_cap)}
           onSaved={() => {
             setPosModal(false);
             mutate();

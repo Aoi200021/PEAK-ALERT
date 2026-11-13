@@ -1,4 +1,5 @@
-import type { AlertType } from "../alerts/types";
+import type { AlertExplanation, AlertType, Severity } from "../alerts/types";
+import type { RiskFactor } from "../risk/score";
 import type { Checkpoints } from "../paper-exit";
 import type { PlanDefinition } from "../plans";
 
@@ -34,6 +35,13 @@ export interface TokenDTO {
   data_updated_at: string | null;
   last_error: string | null;
   last_error_at: string | null;
+  risk_score?: number | null;
+  risk_level?: string | null;
+  risk_coverage?: N;
+  risk_factors?: RiskFactor[] | null;
+  momentum_score?: number | null;
+  risk_updated_at?: string | null;
+  data_source?: string | null;
   sparkline?: number[];
   added_price?: N;
   added_at?: string;
@@ -58,7 +66,9 @@ export interface RuleDTO {
   state: Record<string, unknown>;
   last_triggered_at: string | null;
   created_at: string;
-  token?: Pick<TokenDTO, "id" | "symbol" | "name" | "chain_id" | "image_url" | "price_usd">;
+  position_id?: string | null;
+  token?: Pick<TokenDTO, "id" | "symbol" | "name" | "chain_id" | "image_url" | "price_usd" | "risk_score" | "risk_level">;
+  position?: { id: string; entry_price: N; invested_usd: N; exit_price: N } | null;
 }
 
 export interface PositionDTO {
@@ -70,7 +80,10 @@ export interface PositionDTO {
   exit_price: N;
   exit_at: string | null;
   notes: string | null;
-  token?: Pick<TokenDTO, "id" | "symbol" | "name" | "chain_id" | "image_url" | "price_usd" | "data_updated_at">;
+  entry_market_cap?: N;
+  peak_price?: N;
+  peak_at?: string | null;
+  token?: Pick<TokenDTO, "id" | "symbol" | "name" | "chain_id" | "image_url" | "price_usd" | "data_updated_at" | "market_cap" | "risk_score" | "risk_level">;
 }
 
 export interface PaperDTO {
@@ -94,12 +107,14 @@ export interface EventDTO {
   price_usd: N;
   market_cap: N;
   metrics: Record<string, unknown>;
+  severity: Severity | null;
+  explanation: AlertExplanation | null;
   created_at: string;
   read_at: string | null;
   notified_at: string | null;
   notify_error: string | null;
   rule_id: string | null;
-  token: Pick<TokenDTO, "id" | "symbol" | "name" | "chain_id" | "image_url" | "price_usd"> | null;
+  token: Pick<TokenDTO, "id" | "symbol" | "name" | "chain_id" | "image_url" | "price_usd" | "risk_score" | "risk_level"> | null;
   paper: PaperDTO | null;
 }
 
@@ -109,4 +124,5 @@ export interface MeResponse {
   usage: { tokens: number; rules: number; pushDevices: number };
   pushConfigured: boolean;
   billingEnabled: boolean;
+  subscription: { hasCustomer: boolean; status: string | null; currentPeriodEnd: string | null };
 }

@@ -12,6 +12,8 @@ import { api, fetcher } from "@/lib/client/api";
 import type { MeResponse, PositionDTO, WatchlistResponse } from "@/lib/client/types";
 import { formatDateTime, formatPrice, formatUsd, timeAgo, toNum } from "@/lib/format";
 import { positionPnl } from "@/lib/portfolio";
+import { protectionSummary } from "@/lib/protection";
+import { RiskBadge } from "@/components/risk";
 
 type Filter = "open" | "closed" | "all";
 
@@ -20,10 +22,11 @@ export default function PortfolioPage() {
   if (me && !me.plan.portfolio) {
     return (
       <>
-        <PageHeader title="Portfolio" />
+        <PageHeader title="Profit Protection" />
         <Panel>
-          <EmptyState icon={<Lock size={24} strokeWidth={1.5} />} title="Portfolio tracker disponible en Pro y Premium" action={<Link href="/settings"><Button variant="primary">Ver planes</Button></Link>}>
-            Registra precio de entrada, monto invertido y ventas para ver tu P&amp;L estimado y comparar con las alertas.
+          <EmptyState icon={<Lock size={24} strokeWidth={1.5} />} title="Profit Protection está disponible en Pro y Premium" action={<Link href="/pricing"><Button variant="primary">Ver planes</Button></Link>}>
+            Registra tu entrada (precio o market cap) y monto invertido para ver tu ROI, el beneficio máximo que llegaste a tener, cuánto has
+            devuelto y alertas de trailing stop.
           </EmptyState>
         </Panel>
       </>
@@ -42,7 +45,13 @@ function PortfolioView() {
   const [closing, setClosing] = useState<PositionDTO | null>(null);
 
   const positions = data?.positions ?? [];
-  const rows = positions.map((p) => ({ p, ...positionPnl(p, p.token?.price_usd) }));
+  const rows = positions.map((p) => {
+    const pnl = positionPnl(p, p.token?.price_usd);
+    const entry = toNum(p.entry_price);
+    const prot =
+      entry && !pnl.closed ? protectionSummary(entry, toNum(p.invested_usd) ?? 0, toNum(p.peak_price) ?? entry, toNum(p.token?.price_usd)) : null;
+    return { p, ...pnl, prot };
+  });
   const shown = rows.filter((r) => (filter === "all" ? true : filter === "open" ? !r.closed : r.closed));
 
   const open = rows.filter((r) => !r.closed);
@@ -66,8 +75,8 @@ function PortfolioView() {
   return (
     <>
       <PageHeader
-        title="Portfolio"
-        sub="P&L estimado a partir de tus registros. No incluye comisiones, slippage ni impuestos."
+        title="Profit Protection"
+        sub="Tus posiciones, el beneficio máximo que alcanzaron y cuánto has devuelto. Estimaciones sin comisiones, slippage ni impuestos."
         actions={<Button variant="primary" onClick={() => setCreating(true)}><Plus size={15} /> Registrar posición</Button>}
       />
 
@@ -100,7 +109,7 @@ function PortfolioView() {
           </EmptyState>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[1040px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] uppercase tracking-wide text-faint">
                   <th className="px-4 py-2.5 font-medium">Token</th>
@@ -109,12 +118,15 @@ function PortfolioView() {
                   <th className="px-3 py-2.5 text-right font-medium">Actual / Venta</th>
                   <th className="px-3 py-2.5 text-right font-medium">Valor</th>
                   <th className="px-3 py-2.5 text-right font-medium">P&amp;L</th>
-                  <th className="px-3 py-2.5 text-right font-medium">%</th>
+                  <th className="px-3 py-2.5 text-right font-medium">ROI</th>
+                  <th className="px-3 py-2.5 text-right font-medium" title="Beneficio máximo no realizado desde la entrada">Máx. benef.</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Desde máx.</th>
+                  <th className="px-3 py-2.5 text-right font-medium">Riesgo</th>
                   <th className="px-3 py-2.5" />
                 </tr>
               </thead>
               <tbody>
-                {shown.map(({ p, closed, value, pnl, pnlPct }) => (
+                {shown.map(({ p, closed, value, pnl, pnlPct, prot }) => (
                   <tr key={p.id} className="border-b border-line last:border-0">
                     <td className="px-4 py-2.5">
                       <Link href={`/tokens/${p.token_id}`} className="flex items-center gap-2.5">
@@ -144,8 +156,12 @@ function PortfolioView() {
                       {pnl == null ? "—" : `${pnl >= 0 ? "+" : ""}${formatUsd(pnl)}`}
                     </td>
                     <td className="px-3 py-2.5 text-right"><Delta value={pnlPct} /></td>
+                    <td className="num px-3 py-2.5 text-right text-up">{prot ? `+${formatUsd(prot.maxProfitUsd)}` : "—"}</td>
+                    <td className="px-3 py-2.5 text-right"><Delta value={prot?.drawdownFromPeakPct} digits={1} /></td>
+                    <td className="px-3 py-2.5 text-right">{closed ? <span className="text-faint">—</span> : <RiskBadge score={p.token?.risk_score} size="sm" />}</td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex justify-end gap-1">
+                        <Link href={`/portfolio/${p.id}`}><Button size="sm" variant="primary">Protección</Button></Link>
                         {closed ? (
                           <Button size="sm" variant="ghost" onClick={() => reopen(p)}>Reabrir</Button>
                         ) : (
@@ -181,6 +197,7 @@ function PortfolioView() {
               key={selectedToken.id}
               tokenId={selectedToken.id}
               currentPrice={toNum(selectedToken.price_usd)}
+              currentMarketCap={toNum(selectedToken.market_cap)}
               onSaved={() => {
                 setCreating(false);
                 setTokenId("");

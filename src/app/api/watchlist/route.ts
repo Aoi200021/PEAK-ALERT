@@ -5,7 +5,7 @@ import { refreshTokens } from "@/lib/market/refresh";
 import { addTokenSchema, normalizeAddress } from "@/lib/validation";
 
 const TOKEN_COLUMNS =
-  "id, chain_id, address, pair_address, dex_id, pair_url, name, symbol, image_url, price_usd, market_cap, fdv, liquidity_usd, volume_m5, volume_h1, volume_h6, volume_h24, change_m5, change_h1, change_h6, change_h24, txns, pair_created_at, peak_price, peak_market_cap, peak_at, data_updated_at, last_error, last_error_at";
+  "id, chain_id, address, pair_address, dex_id, pair_url, name, symbol, image_url, price_usd, market_cap, fdv, liquidity_usd, volume_m5, volume_h1, volume_h6, volume_h24, change_m5, change_h1, change_h6, change_h24, txns, pair_created_at, peak_price, peak_market_cap, peak_at, data_updated_at, last_error, last_error_at, risk_score, risk_level, risk_coverage, momentum_score, risk_updated_at, data_source";
 
 /** List watched tokens. Refreshes stale market data first (max every 30 s per token). */
 export const GET = handler(async () => {

@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client/api";
 import type { PositionDTO } from "@/lib/client/types";
-import { formatPrice, toNum } from "@/lib/format";
-import { Button, ErrorNote, Field, Input } from "./ui";
+import { formatPrice, formatUsdCompact, toNum } from "@/lib/format";
+import { Button, ErrorNote, Field, Input, Segmented } from "./ui";
 
 /** datetime-local value for "now" in the user's timezone */
 function localNow(d = new Date()) {
@@ -21,13 +21,17 @@ function plainNumber(n: number | null) {
 export function NewPositionForm({
   tokenId,
   currentPrice,
+  currentMarketCap = null,
   onSaved,
 }: {
   tokenId: string;
   currentPrice: number | null;
+  currentMarketCap?: number | null;
   onSaved: () => void;
 }) {
+  const [by, setBy] = useState<"price" | "mcap">("price");
   const [entryPrice, setEntryPrice] = useState(plainNumber(currentPrice));
+  const [entryMc, setEntryMc] = useState(currentMarketCap ? String(Math.round(currentMarketCap)) : "");
   const [invested, setInvested] = useState("");
   const [entryAt, setEntryAt] = useState(localNow());
   const [notes, setNotes] = useState("");
@@ -43,7 +47,7 @@ export function NewPositionForm({
         method: "POST",
         json: {
           tokenId,
-          entryPrice: Number(entryPrice),
+          ...(by === "price" ? { entryPrice: Number(entryPrice) } : { entryMarketCap: Number(entryMc) }),
           investedUsd: Number(invested),
           entryAt: new Date(entryAt).toISOString(),
           notes: notes || undefined,
@@ -57,14 +61,37 @@ export function NewPositionForm({
     }
   }
 
-  const qty = Number(invested) > 0 && Number(entryPrice) > 0 ? Number(invested) / Number(entryPrice) : null;
+  const derivedPrice =
+    by === "mcap" && Number(entryMc) > 0 && currentPrice && currentMarketCap ? Number(entryMc) * (currentPrice / currentMarketCap) : null;
+  const effPrice = by === "price" ? Number(entryPrice) : derivedPrice;
+  const qty = Number(invested) > 0 && effPrice && effPrice > 0 ? Number(invested) / effPrice : null;
 
   return (
     <form onSubmit={submit} className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted">Indicar entrada por</span>
+        <Segmented
+          value={by}
+          onChange={setBy}
+          options={[
+            { value: "price", label: "Precio" },
+            ...(currentMarketCap ? [{ value: "mcap" as const, label: "Market cap" }] : []),
+          ]}
+        />
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Precio de entrada (USD)" hint={currentPrice ? `Actual: ${formatPrice(currentPrice)}` : undefined}>
-          <Input type="number" inputMode="decimal" step="any" min={0} required value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} className="num" />
-        </Field>
+        {by === "price" ? (
+          <Field label="Precio de entrada (USD)" hint={currentPrice ? `Actual: ${formatPrice(currentPrice)}` : undefined}>
+            <Input type="number" inputMode="decimal" step="any" min={0} required value={entryPrice} onChange={(e) => setEntryPrice(e.target.value)} className="num" />
+          </Field>
+        ) : (
+          <Field
+            label="Market cap de entrada (USD)"
+            hint={derivedPrice ? `≈ precio ${formatPrice(derivedPrice)} (misma supply que hoy)` : currentMarketCap ? `Actual: ${formatUsdCompact(currentMarketCap)}` : undefined}
+          >
+            <Input type="number" inputMode="decimal" step="any" min={0} required value={entryMc} onChange={(e) => setEntryMc(e.target.value)} className="num" />
+          </Field>
+        )}
         <Field label="Monto invertido (USD)" hint={qty ? `≈ ${qty.toLocaleString("en-US", { maximumFractionDigits: 2 })} tokens` : undefined}>
           <Input type="number" inputMode="decimal" step="any" min={0} required value={invested} onChange={(e) => setInvested(e.target.value)} className="num" />
         </Field>

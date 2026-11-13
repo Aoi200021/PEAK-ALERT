@@ -192,8 +192,33 @@ export async function fetchPairsForChain(
   return result;
 }
 
+/** Market-data columns of public.tokens, shared by every data source. */
+export interface MarketRow {
+  pair_address: string | null;
+  dex_id: string | null;
+  pair_url: string | null;
+  name: string | null;
+  symbol: string | null;
+  image_url: string | null;
+  price_usd: number | null;
+  price_native: number | null;
+  market_cap: number | null;
+  fdv: number | null;
+  liquidity_usd: number | null;
+  volume_m5: number | null;
+  volume_h1: number | null;
+  volume_h6: number | null;
+  volume_h24: number | null;
+  change_m5: number | null;
+  change_h1: number | null;
+  change_h6: number | null;
+  change_h24: number | null;
+  txns: unknown;
+  pair_created_at: string | null;
+}
+
 /** Map a pair to the columns of public.tokens. */
-export function pairToTokenRow(p: DexPair) {
+export function pairToTokenRow(p: DexPair): MarketRow {
   return {
     pair_address: p.pairAddress,
     dex_id: p.dexId ?? null,

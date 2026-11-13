@@ -13,6 +13,7 @@
   --up: #2ebd85;
   --down: #f6465d;
   --warn: #e8b14a;
+  --orange: #f0883e;
   --focus: #6b8afd;
   color-scheme: dark;
 }
@@ -29,6 +30,7 @@
   --color-up: var(--up);
   --color-down: var(--down);
   --color-warn: var(--warn);
+  --color-orange: var(--orange);
   --color-focus: var(--focus);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
@@ -88,4 +90,16 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 .pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Subtle entrance for cards and rows */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.rise {
+  animation: rise 0.35s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise, .pulse-dot { animation: none; }
 }

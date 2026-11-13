@@ -33,7 +33,7 @@ export default function AnalyticsPage() {
       <PageHeader title="Analíticas" sub="¿Fueron útiles tus alertas? Basado en Paper Exit: precios observados después de cada alerta." />
       {me && !allowed ? (
         <Panel>
-          <EmptyState icon={<Lock size={24} strokeWidth={1.5} />} title="Analíticas avanzadas disponibles en Premium" action={<Link href="/settings"><Button variant="primary">Ver planes</Button></Link>}>
+          <EmptyState icon={<Lock size={24} strokeWidth={1.5} />} title="Analíticas avanzadas disponibles en Premium" action={<Link href="/pricing"><Button variant="primary">Ver planes</Button></Link>}>
             Mide, por tipo de alerta, qué pasó con el precio 1 h, 24 h y 7 días después de cada aviso.
           </EmptyState>
         </Panel>
