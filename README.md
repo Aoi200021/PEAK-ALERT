@@ -69,6 +69,8 @@ Stack: Next.js 16 + TypeScript + Tailwind v4, Supabase (Auth + Postgres + RLS), 
 - Los picos que duren menos que el intervalo entre lecturas (~1 min) pueden no registrarse.
 - La presión de venta usa el **número** de transacciones (DexScreener no separa el volumen por lado).
 - El market cap de entrada se convierte a precio con la relación precio/market cap **actual** (supone que la supply no cambió).
+- **Jupiter Tokens API** (`lite-api.jup.ag`, gratis y sin key) es la **fuente de respaldo para Solana**: cubre monedas de Pump.fun y otros launchpads todavía en la *bonding curve* que DexScreener no ha indexado. Se usa solo cuando DexScreener no tiene la moneda. Si una moneda existe pero **no tiene operaciones**, no tiene precio real y no se puede seguir; la app explica el motivo.
+- **Entrada flexible:** se acepta la CA del token, la dirección del par (la de las URLs de DexScreener) o un enlace pegado (DexScreener, Pump.fun, Birdeye, GMGN, Jupiter, exploradores), en **cualquier red** que tenga DexScreener.
 - **Birdeye** (opcional, `BIRDEYE_API_KEY`) solo se usa como respaldo para tokens de Solana sin datos en DexScreener. ⚠️ **No está verificado contra la API real** (no había key en el entorno de desarrollo); el parseo es tolerante y los campos que faltan quedan vacíos.
 - Nunca se inventan datos: los valores ausentes se muestran como "—". La única excepción es la demo sin conexión, que se etiqueta como datos de demostración.
 

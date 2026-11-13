@@ -1,7 +1,8 @@
 import "server-only";
 import { computeMomentum, computeRisk } from "../risk/score";
 import { normalizeAddress } from "../validation";
-import { fetchPairsForChain, pairToTokenRow, pickBestPair, searchPairs, type DexPair } from "./dexscreener";
+import { fetchPairsForChain, pairToTokenRow, pickBestPair, searchPairs, type DexPair, type MarketRow } from "./dexscreener";
+import { fetchJupiterTokens, jupiterToRow } from "./jupiter";
 
 /** Well-known Solana memecoins used for the public preview (addresses verified on DexScreener). */
 export const DEMO_TOKENS = [
@@ -43,15 +44,24 @@ export interface PublicSnapshot {
 }
 
 function toPublic(address: string, p: DexPair, chainId = "solana"): PublicToken {
-  const row = pairToTokenRow(p);
+  return rowToPublic(address, pairToTokenRow(p), chainId, p.txns?.m5 ?? null, p.txns?.h1 ?? null);
+}
+
+function rowToPublic(
+  address: string,
+  row: MarketRow,
+  chainId: string,
+  txM5: { buys: number; sells: number } | null,
+  txH1: { buys: number; sells: number } | null,
+): PublicToken {
   const market = {
     priceUsd: row.price_usd,
     marketCap: row.market_cap,
     liquidityUsd: row.liquidity_usd,
     volume: { m5: row.volume_m5, h1: row.volume_h1, h6: row.volume_h6, h24: row.volume_h24 },
     change: { m5: row.change_m5, h1: row.change_h1, h6: row.change_h6, h24: row.change_h24 },
-    txnsM5: p.txns?.m5 ?? null,
-    txnsH1: p.txns?.h1 ?? null,
+    txnsM5: txM5,
+    txnsH1: txH1,
   };
   // No PeakAlert history here → history-based factors are excluded (coverage < 1).
   const risk = computeRisk(market, []);
@@ -141,6 +151,15 @@ export async function analyzePublicAddress(address: string): Promise<PublicToken
     if (best) out.push(toPublic(normalizeAddress(chainId, best.baseToken.address), best, chainId));
   }
   out.sort((a, b) => (b.liquidity_usd ?? 0) - (a.liquidity_usd ?? 0));
+  if (!out.length && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(key)) {
+    // Pump.fun / launchpad tokens DexScreener hasn't indexed yet
+    const jup = (await fetchJupiterTokens([key])).get(key);
+    const row = jup ? jupiterToRow(jup) : null;
+    if (row) {
+      const tx = row.txns as { m5: { buys: number; sells: number } | null; h1: { buys: number; sells: number } | null };
+      out.push(rowToPublic(key, row, "solana", tx.m5, tx.h1));
+    }
+  }
   if (lookupCache.size > 500) lookupCache.clear();
   lookupCache.set(key, { at: Date.now(), data: out });
   return out;

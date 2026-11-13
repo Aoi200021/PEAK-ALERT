@@ -42,3 +42,28 @@ describe.skipIf(!process.env.LIVE)("DexScreener (live)", () => {
     expect(m.size).toBe(0);
   });
 });
+
+describe.skipIf(!process.env.LIVE)("Solana fallback (live)", () => {
+  it("explains tokens that exist on Pump.fun but have no trades", async () => {
+    const { findToken } = await import("./lookup");
+    const r = await findToken("HNEPZXGMLqGu9Pi79sqzVdexPZhhH6FwToUjLJcEpump");
+    expect(r.candidates).toEqual([]);
+    expect(r.reason).toBe("no_trades");
+    expect(r.info?.launchpad).toBe("pump.fun");
+  });
+
+  it("finds traded Pump.fun tokens DexScreener hasn't indexed, via Jupiter", async () => {
+    const { findToken } = await import("./lookup");
+    const res = await fetch("https://lite-api.jup.ag/tokens/v2/recent");
+    const recent = ((await res.json()) as { id: string; launchpad?: string; usdPrice?: number }[]).filter(
+      (t) => t.launchpad === "pump.fun" && t.usdPrice,
+    );
+    const ids = recent.map((t) => t.id).slice(0, 25);
+    const dex = await fetchPairsForChain("solana", ids);
+    const missing = ids.find((id) => !dex.has(id));
+    if (!missing) return; // DexScreener happened to have them all right now
+    const r = await findToken(missing);
+    expect(r.source).toBe("jupiter");
+    expect(r.candidates[0].priceUsd).toBeGreaterThan(0);
+  });
+});

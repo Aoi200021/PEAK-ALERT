@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { L, msg } from "@/lib/i18n";
 import { handler, HttpError, readJson, requireUser, zodMessage } from "@/lib/api";
-import { fetchPairsForChain, pairToTokenRow } from "@/lib/market/dexscreener";
+import { fetchPairsForChain, pairToTokenRow, type MarketRow } from "@/lib/market/dexscreener";
+import { fetchJupiterTokens, jupiterToRow } from "@/lib/market/jupiter";
 import { refreshTokens } from "@/lib/market/refresh";
 import { addTokenSchema, normalizeAddress } from "@/lib/validation";
 
@@ -81,15 +82,20 @@ export const POST = handler(async (req: Request) => {
     );
   }
 
-  // Validate against live market data before storing anything.
-  const pairs = await fetchPairsForChain(chainId, [address]);
-  const pair = pairs.get(address);
-  if (!pair || pair.priceUsd == null) {
+  // Validate against live market data before storing anything (DexScreener, then Jupiter for Solana).
+  const pair = (await fetchPairsForChain(chainId, [address])).get(address);
+  let row: MarketRow | null = pair && pair.priceUsd != null ? pairToTokenRow(pair) : null;
+  let source = "dexscreener";
+  if (!row && chainId === "solana") {
+    const jup = (await fetchJupiterTokens([address])).get(address);
+    row = jup ? jupiterToRow(jup) : null;
+    source = "jupiter";
+  }
+  if (!row || row.price_usd == null) {
     throw new HttpError(404, "TOKEN_NOT_FOUND", L("No market data for this token on that chain.", "No hay datos de mercado para este token en esa red."));
   }
 
   const now = new Date().toISOString();
-  const row = pairToTokenRow(pair);
   const { data: existing } = await admin
     .from("tokens")
     .select("id")
@@ -109,6 +115,7 @@ export const POST = handler(async (req: Request) => {
         peak_market_cap: row.market_cap,
         peak_at: now,
         data_updated_at: now,
+        data_source: source,
         last_snapshot_at: now,
       })
       .select("id")

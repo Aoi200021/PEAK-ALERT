@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { L } from "@/lib/i18n";
 import { handler, HttpError, requireUser, zodMessage } from "@/lib/api";
-import { lookupToken } from "@/lib/market/dexscreener";
+import { findToken } from "@/lib/market/lookup";
 import { addressSchema } from "@/lib/validation";
 
 /**
@@ -13,7 +13,19 @@ export const GET = handler(async (req: Request) => {
   const parsed = addressSchema.safeParse(new URL(req.url).searchParams.get("address") ?? "");
   if (!parsed.success) throw new HttpError(400, "INVALID_ADDRESS", zodMessage(parsed.error));
 
-  const { candidates, reason, resolvedFromPair } = await lookupToken(parsed.data);
+  const { candidates, reason, resolvedFromPair, info } = await findToken(parsed.data);
+  if (candidates.length === 0 && reason === "no_trades") {
+    const name = info?.symbol ? `${info.symbol}${info.name ? ` (${info.name})` : ""}` : "This token";
+    const where = info?.launchpad ?? "its launchpad";
+    throw new HttpError(
+      404,
+      "NO_TRADES",
+      L(
+        `${name} exists on ${where} but has no trades yet${info?.holders != null ? ` (${info.holders} holder${info.holders === 1 ? "" : "s"})` : ""}, so there's no real price to track. Any market cap shown elsewhere is theoretical (virtual reserves).`,
+        `${name === "This token" ? "Este token" : name} existe en ${where} pero aún no tiene operaciones${info?.holders != null ? ` (${info.holders} holder${info.holders === 1 ? "" : "s"})` : ""}, así que no hay un precio real que seguir. Cualquier market cap que veas en otro sitio es teórico (reservas virtuales).`,
+      ),
+    );
+  }
   if (candidates.length === 0) {
     throw new HttpError(
       404,

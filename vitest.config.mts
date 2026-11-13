@@ -9,5 +9,6 @@ export default defineConfig({
       "server-only": path.resolve(import.meta.dirname, "test/server-only-stub.ts"),
     },
   },
-  test: { include: ["src/**/*.test.ts"] },
+  // Live tests hit real APIs (several sequential calls) → longer timeout.
+  test: { include: ["src/**/*.test.ts"], testTimeout: process.env.LIVE ? 30_000 : 5_000 },
 });

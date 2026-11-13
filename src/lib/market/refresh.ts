@@ -10,6 +10,7 @@ import { computeMomentum, computeRisk, type RiskMarket, type SeriesPoint } from 
 import { getPlan } from "../plans";
 import { msg, type Locale } from "../i18n";
 import { birdeyeEnabled, fetchBirdeyeRow } from "./birdeye";
+import { fetchJupiterTokens, jupiterToRow } from "./jupiter";
 import { fetchPairsForChain, MarketApiError, pairToTokenRow, type MarketRow } from "./dexscreener";
 
 /** DexScreener caches ~30 s, so refreshing more often only burns rate limit. */
@@ -152,9 +153,24 @@ export async function refreshTokens(
       chainError = e instanceof MarketApiError ? e.message : msg("Error querying DexScreener", "Error al consultar DexScreener");
       summary.errors.push(`${chainId}: ${chainError}`);
     }
+    // Solana fallback: Jupiter covers launchpad tokens DexScreener hasn't indexed (one batched call).
+    const jupRows = new Map<string, MarketRow>();
+    if (chainId === "solana") {
+      const missing = list.map((t) => t.address).filter((a) => !pairs.has(a));
+      if (missing.length) {
+        for (const [mint, tok] of await fetchJupiterTokens(missing)) {
+          const r = jupiterToRow(tok);
+          if (r) jupRows.set(mint, r);
+        }
+      }
+    }
     for (const t of list) {
       let row = pairs.get(t.address) ?? null;
       let source = "dexscreener";
+      if (!row && jupRows.has(t.address)) {
+        row = jupRows.get(t.address)!;
+        source = "jupiter";
+      }
       // Optional fallback: Birdeye for Solana tokens DexScreener couldn't serve.
       if (!row && chainId === "solana" && birdeyeEnabled()) {
         row = await fetchBirdeyeRow(t.address);
@@ -162,7 +178,7 @@ export async function refreshTokens(
       }
       if (!row || row.price_usd == null) {
         if (!chainError) summary.missing++;
-        failures.push({ id: t.id, error: chainError ?? msg("No market data available for this token", "Sin datos de mercado disponibles para este token") });
+        failures.push({ id: t.id, error: (!jupRows.size && chainError) || msg("No market data available for this token", "Sin datos de mercado disponibles para este token") });
         continue;
       }
       const price = row.price_usd;
