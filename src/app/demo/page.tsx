@@ -96,8 +96,8 @@ export default function DemoPage() {
           <label htmlFor="demo-search" className="text-sm font-medium">{tr("Analyze any token", "Analiza cualquier token")}</label>
           <p className="mt-0.5 text-xs text-muted">
             {tr(
-              "Paste a contract address (Solana, Ethereum, Base, BNB…) and see its risk score instantly — no sign-up.",
-              "Pega la contract address (Solana, Ethereum, Base, BNB…) y mira su puntuación de riesgo al momento, sin registrarte.",
+              "Paste a contract address or link (any chain on DexScreener) and see its risk score instantly — no sign-up.",
+              "Pega la contract address o un enlace (cualquier red de DexScreener) y mira su puntuación de riesgo al momento, sin registrarte.",
             )}
           </p>
           <div className="mt-3 flex gap-2">
@@ -105,7 +105,7 @@ export default function DemoPage() {
               id="demo-search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Contract address"
+              placeholder={tr("Contract address or DexScreener / Pump.fun link", "Contract address o enlace de DexScreener / Pump.fun")}
               spellCheck={false}
               autoComplete="off"
               className="num text-[13px]"

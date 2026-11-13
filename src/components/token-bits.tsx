@@ -1,6 +1,6 @@
 "use client";
 
-import { CHAIN_LABEL } from "@/lib/validation";
+import { chainLabel } from "@/lib/validation";
 import { timeAgo } from "@/lib/format";
 import { useI18n } from "@/lib/i18n/client";
 import { cn } from "./ui";
@@ -36,7 +36,7 @@ export function TokenAvatar({ src, symbol, size = 28 }: { src?: string | null; s
 export function ChainTag({ chain }: { chain: string }) {
   return (
     <span className="rounded bg-panel-2 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-faint ring-1 ring-line">
-      {CHAIN_LABEL[chain] ?? chain}
+      {chainLabel(chain)}
     </span>
   );
 }

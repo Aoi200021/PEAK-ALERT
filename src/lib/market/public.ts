@@ -1,6 +1,6 @@
 import "server-only";
 import { computeMomentum, computeRisk } from "../risk/score";
-import { SUPPORTED_CHAINS, normalizeAddress } from "../validation";
+import { normalizeAddress } from "../validation";
 import { fetchPairsForChain, pairToTokenRow, pickBestPair, searchPairs, type DexPair } from "./dexscreener";
 
 /** Well-known Solana memecoins used for the public preview (addresses verified on DexScreener). */
@@ -134,7 +134,7 @@ export async function analyzePublicAddress(address: string): Promise<PublicToken
   const hit = lookupCache.get(key);
   if (hit && Date.now() - hit.at < TTL) return hit.data;
   const pairs = await searchPairs(key);
-  const chains = [...new Set(pairs.map((p) => p.chainId))].filter((c) => (SUPPORTED_CHAINS as readonly string[]).includes(c));
+  const chains = [...new Set(pairs.map((p) => p.chainId))];
   const out: PublicToken[] = [];
   for (const chainId of chains) {
     const best = pickBestPair(pairs, chainId, key);

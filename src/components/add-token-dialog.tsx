@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { api, ApiError } from "@/lib/client/api";
 import { formatPct, formatPrice, formatUsdCompact, shortAddress } from "@/lib/format";
-import { detectAddressKind } from "@/lib/validation";
+import { detectAddressKind, extractAddress } from "@/lib/validation";
 import { Button, ErrorNote, InfoNote, Input, Modal, cn } from "./ui";
 import { ChainTag, TokenAvatar } from "./token-bits";
 import { useI18n } from "@/lib/i18n/client";
@@ -42,6 +42,7 @@ export function AddTokenDialog({
   const [candidates, setCandidates] = useState<Candidate[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [fromPair, setFromPair] = useState(false);
 
   function reset() {
     setAddress("");
@@ -54,19 +55,20 @@ export function AddTokenDialog({
     e.preventDefault();
     setError(null);
     setCandidates(null);
-    const a = address.trim();
+    const a = extractAddress(address);
     if (!detectAddressKind(a)) {
-      setError(t("Invalid format. Paste the contract address (EVM 0x…, Solana, Sui or TON).", "Formato no válido. Pega la contract address (EVM 0x…, Solana, Sui o TON)."));
+      setError(t("That doesn't look like a contract address. Paste the token's CA or a DexScreener / Pump.fun link.", "Eso no parece una contract address. Pega la CA del token o un enlace de DexScreener / Pump.fun."));
       return;
     }
     setLoading(true);
     try {
-      const r = await api<{ candidates: Candidate[]; fetchedAt: string }>(
+      const r = await api<{ candidates: Candidate[]; fetchedAt: string; resolvedFromPair: string | null }>(
         `/api/tokens/lookup?address=${encodeURIComponent(a)}`,
       );
       setCandidates(r.candidates);
       setSelected(r.candidates[0]?.chainId ?? null);
       setFetchedAt(r.fetchedAt);
+      setFromPair(Boolean(r.resolvedFromPair));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("Couldn't fetch the token.", "No se pudo consultar el token."));
     } finally {
@@ -107,7 +109,7 @@ export function AddTokenDialog({
           autoFocus
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          placeholder="Contract address"
+          placeholder={t("Contract address or DexScreener / Pump.fun link", "Contract address o enlace de DexScreener / Pump.fun")}
           spellCheck={false}
           autoComplete="off"
           className="num text-[13px]"
@@ -117,12 +119,20 @@ export function AddTokenDialog({
           <Search size={14} /> {t("Search", "Buscar")}
         </Button>
       </form>
-      <p className="mt-2 text-[11px] text-faint">{t("Data from DexScreener. The most liquid pair on each chain is used.", "Datos de DexScreener. Se usa el par con más liquidez en cada red.")}</p>
+      <p className="mt-2 text-[11px] text-faint">{t(
+          "Any chain on DexScreener (Solana, Base, BNB, Ethereum, Tron…). Data from DexScreener; the most liquid pair is used.",
+          "Cualquier red de DexScreener (Solana, Base, BNB, Ethereum, Tron…). Datos de DexScreener; se usa el par con más liquidez.",
+        )}</p>
 
       {error && <div className="mt-4"><ErrorNote>{error}</ErrorNote></div>}
 
       {candidates && candidates.length > 0 && (
         <div className="mt-5 space-y-2">
+          {fromPair && (
+            <InfoNote>
+              {t("You pasted a pair/pool address — we found the token it belongs to.", "Pegaste la dirección de un par/pool — encontramos el token al que pertenece.")}
+            </InfoNote>
+          )}
           {candidates.length > 1 && (
             <InfoNote>
               {t(

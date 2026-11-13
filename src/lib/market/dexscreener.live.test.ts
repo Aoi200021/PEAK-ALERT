@@ -9,15 +9,21 @@ const BONK = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
 const PEPE = "0x6982508145454ce325ddbe47a25d4ec3d2311933";
 
 describe.skipIf(!process.env.LIVE)("DexScreener (live)", () => {
+  it("resolves a PAIR address (what DexScreener URLs contain) to its token", async () => {
+    const r = await lookupToken("5zpyutJu9ee6jFymDGoK7F6S5Kczqtc9FomP3ueKuyA9"); // BONK/SOL pool on Orca
+    expect(r.resolvedFromPair).toBeTruthy();
+    expect(r.candidates[0].address).toBe(BONK);
+  });
+
   it("looks up a Solana token", async () => {
-    const c = await lookupToken(BONK);
+    const { candidates: c } = await lookupToken(BONK);
     expect(c[0].chainId).toBe("solana");
     expect(c[0].symbol?.toLowerCase()).toBe("bonk");
     expect(c[0].priceUsd).toBeGreaterThan(0);
   });
 
   it("returns several chains for an EVM address, most liquid first", async () => {
-    const c = await lookupToken(PEPE);
+    const { candidates: c } = await lookupToken(PEPE);
     expect(c[0].chainId).toBe("ethereum");
     expect(c[0].address).toBe(PEPE);
   });
@@ -31,7 +37,7 @@ describe.skipIf(!process.env.LIVE)("DexScreener (live)", () => {
   });
 
   it("returns nothing (not fake data) for an unknown address", async () => {
-    expect(await lookupToken("0x000000000000000000000000000000000000dEaD")).toEqual([]);
+    expect(await lookupToken("0x000000000000000000000000000000000000dEaD")).toMatchObject({ candidates: [], reason: "no_pairs" });
     const m = await fetchPairsForChain("ethereum", ["0x000000000000000000000000000000000000dead"]);
     expect(m.size).toBe(0);
   });

@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { isEvmChain, normalizeAddress } from "../validation";
+import { isCaseInsensitiveAddress, normalizeAddress } from "../validation";
 import { msg } from "../i18n";
 
 /**
@@ -104,8 +104,8 @@ function parsePairs(raw: unknown): DexPair[] {
   return out;
 }
 
-function sameAddress(chainId: string, a: string, b: string) {
-  return isEvmChain(chainId) ? a.toLowerCase() === b.toLowerCase() : a === b;
+function sameAddress(_chainId: string, a: string, b: string) {
+  return isCaseInsensitiveAddress(a) || isCaseInsensitiveAddress(b) ? a.toLowerCase() === b.toLowerCase() : a === b;
 }
 
 /** Most liquid pair where the token is the BASE token (so priceUsd is the token's price). */
@@ -146,12 +146,37 @@ export async function searchPairs(address: string): Promise<DexPair[]> {
   return parsePairs(await getJson(`/latest/dex/tokens/${encodeURIComponent(address.trim())}`));
 }
 
-export async function lookupToken(address: string): Promise<TokenCandidate[]> {
-  const pairs = await searchPairs(address);
+export interface LookupResult {
+  candidates: TokenCandidate[];
+  /** Why there are no candidates, when empty. */
+  reason: "ok" | "no_pairs" | "no_usd_price";
+  /** Set when the input was a PAIR address and we resolved it to the token. */
+  resolvedFromPair?: string;
+}
+
+/**
+ * Search an address across every chain DexScreener tracks. Accepts a token CA or a
+ * pair/pool address (resolved to its base token). One candidate per chain, most liquid first.
+ */
+export async function lookupToken(input: string): Promise<LookupResult> {
+  let address = input.trim();
+  let pairs = await searchPairs(address);
+  let resolvedFromPair: string | undefined;
+  if (!pairs.some((p) => sameAddress(p.chainId, p.baseToken.address, address))) {
+    // Maybe it's a pair address (what DexScreener URLs contain). The search endpoint finds pairs by address.
+    const found = parsePairs(await getJson(`/latest/dex/search?q=${encodeURIComponent(address)}`)).find((p) =>
+      sameAddress(p.chainId, p.pairAddress, address),
+    );
+    if (found) {
+      resolvedFromPair = address;
+      address = found.baseToken.address;
+      pairs = await searchPairs(address);
+    }
+  }
   const chains = new Set(pairs.map((p) => p.chainId));
   const out: TokenCandidate[] = [];
   for (const chainId of chains) {
-    const best = pickBestPair(pairs, chainId, address.trim());
+    const best = pickBestPair(pairs, chainId, address);
     if (!best) continue;
     out.push({
       chainId,
@@ -171,7 +196,13 @@ export async function lookupToken(address: string): Promise<TokenCandidate[]> {
       pairCount: pairs.filter((p) => p.chainId === chainId).length,
     });
   }
-  return out.sort((a, b) => (b.liquidityUsd ?? 0) - (a.liquidityUsd ?? 0));
+  out.sort((a, b) => (b.liquidityUsd ?? 0) - (a.liquidityUsd ?? 0));
+  const baseMatches = pairs.filter((p) => sameAddress(p.chainId, p.baseToken.address, address));
+  return {
+    candidates: out,
+    reason: out.length ? "ok" : baseMatches.length ? "no_usd_price" : "no_pairs",
+    resolvedFromPair,
+  };
 }
 
 /**
