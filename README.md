@@ -143,6 +143,8 @@ npm run test:live    # tests contra DexScreener real
 
 ### 6.4 Vercel + job
 1. Importa el repo en Vercel, añade las variables y despliega.
+   - Con el repo conectado (Vercel → Settings → Git), **cada push a la rama de producción se publica solo**. La rama se configura en Settings → Environments → Production → Branch Tracking.
+   - En el plan Hobby, Vercel puede bloquear despliegues automáticos de repos **privados** si el autor del commit no es el dueño de la cuenta. Soluciones: hacer público el repo o publicar con la CLI (`npx vercel deploy --prod`).
 2. En Supabase → SQL Editor ejecuta `supabase/cron.sql`, reemplazando antes `<APP_URL>` y `<CRON_SECRET>`.
 3. Comprueba: `select status_code, content from net._http_response order by created desc limit 5;` debe devolver 200.
 
