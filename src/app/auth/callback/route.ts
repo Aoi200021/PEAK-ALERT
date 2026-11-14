@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   }
 
   if (error) {
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(localeFromRequest(request) === "es" ? "El enlace no es válido o expiró." : "The link is invalid or has expired.")}`, url.origin));
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(localeFromRequest(request) === "es" ? "El enlace no es válido o ya se usó. Si ya confirmaste tu email, solo inicia sesión." : "This link is invalid or was already used. If you already confirmed your email, just log in.")}`, url.origin));
   }
   return NextResponse.redirect(new URL(next, url.origin));
 }
