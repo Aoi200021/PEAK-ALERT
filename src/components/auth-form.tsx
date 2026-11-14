@@ -95,6 +95,14 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       </Field>
       {error && <ErrorNote>{error}</ErrorNote>}
       {info && <p className="rounded-md border border-up/25 bg-up/5 px-3 py-2 text-sm text-up">{info}</p>}
+      {mode === "signup" && (
+        <p className="text-[11px] leading-relaxed text-faint">
+          {t("By creating an account you agree to the", "Al crear una cuenta aceptas los")}{" "}
+          <Link href="/terms" className="text-muted underline underline-offset-2">{t("Terms of Service", "Términos de servicio")}</Link>{" "}
+          {t("and the", "y el")}{" "}
+          <Link href="/privacy" className="text-muted underline underline-offset-2">{t("Privacy Policy", "Aviso de privacidad")}</Link>.
+        </p>
+      )}
       <Button type="submit" variant="primary" className="w-full" loading={loading === "password"}>
         {mode === "login" ? t("Log in", "Entrar") : t("Create account", "Crear cuenta")}
       </Button>

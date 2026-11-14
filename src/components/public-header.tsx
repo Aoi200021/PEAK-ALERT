@@ -37,6 +37,9 @@ export function PublicFooter() {
         <div className="flex flex-wrap items-center gap-4">
           <Link href="/pricing" className="hover:text-muted">{t("Pricing", "Precios")}</Link>
           <Link href="/demo" className="hover:text-muted">Demo</Link>
+          <Link href="/terms" className="hover:text-muted">{t("Terms", "Términos")}</Link>
+          <Link href="/privacy" className="hover:text-muted">{t("Privacy", "Privacidad")}</Link>
+          <Link href="/refunds" className="hover:text-muted">{t("Refunds", "Reembolsos")}</Link>
           <a href="https://dexscreener.com" target="_blank" rel="noreferrer" className="hover:text-muted">{t("Data: DexScreener", "Datos: DexScreener")}</a>
           <LanguageSwitcher />
         </div>
