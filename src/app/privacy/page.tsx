@@ -90,6 +90,12 @@ export default function PrivacyPage() {
             "Solo usamos cookies esenciales: una para mantener tu sesión iniciada y otra para recordar tu idioma. No usamos cookies de publicidad ni de seguimiento de terceros.",
           )}
         </p>
+        <p>
+          {t(
+            "We use Vercel Web Analytics to count page visits in aggregate (for example, which pages are visited and from which website people arrive). It doesn't use cookies and doesn't identify you personally.",
+            "Usamos Vercel Web Analytics para contar las visitas de forma agregada (por ejemplo, qué páginas se visitan y desde qué sitio llega la gente). No usa cookies ni te identifica personalmente.",
+          )}
+        </p>
       </Section>
 
       <Section title={t("5. How long we keep it", "5. Cuánto tiempo los conservamos")}>
